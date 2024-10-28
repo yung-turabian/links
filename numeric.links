@@ -1,0 +1,8 @@
+sig id_num : (a::Numeric) -> a::Numeric
+var id_num = fun (x) {x};
+
+sig add : (a::Numeric, a::Numeric) -> a::Numeric
+var add = fun (x,y) {x + y};
+
+
+add(1, 2)

@@ -158,6 +158,7 @@ let subkind_of p =
   | "Any"     -> Some (lin_any, res_any)
   | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
+  | "Numeric" -> Some (lin_unl, res_numeric) (* for numerics, should probably be subsubkind *)
   | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))

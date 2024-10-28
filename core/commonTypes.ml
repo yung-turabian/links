@@ -51,6 +51,7 @@ module Restriction = struct
   type t =
     | Any
     | Base
+    | Numeric
     | Mono
     | Session
     | Effect
@@ -62,6 +63,10 @@ module Restriction = struct
 
   let is_base = function
     | Base -> true
+    | _    -> false
+
+  let is_numeric = function
+    | Numeric -> true
     | _    -> false
 
   let is_mono = function
@@ -79,6 +84,7 @@ module Restriction = struct
   let to_string = function
     | Any     -> "Any"
     | Base    -> "Base"
+    | Numeric -> "Numeric"
     | Mono    -> "Mono"
     | Session -> "Session"
     | Effect  -> "Eff"
@@ -86,6 +92,7 @@ module Restriction = struct
   let min l r =
     match l, r with
     | Any, Any         -> Some Any
+    | Numeric, Numeric -> Some Numeric
     | Mono, Mono       -> Some Mono
     | Session, Session -> Some Session
     | Effect, Effect   -> Some Effect
@@ -99,6 +106,7 @@ end
 (* Convenient aliases for constructing values *)
 let res_any     = Restriction.Any
 let res_base    = Restriction.Base
+let res_numeric = Restriction.Numeric
 let res_mono    = Restriction.Mono
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
@@ -317,11 +325,11 @@ end
 
 module Constant = struct
   type t =
-    | Float  of float
-    | Int    of int
-    | Bool   of bool
-    | String of string
-    | Char   of char
+    | Float    of float
+    | Int      of int
+    | Bool     of bool
+    | String   of string
+    | Char     of char
     | DateTime of Timestamp.t
       [@@deriving show, ord]
 
