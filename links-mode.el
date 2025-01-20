@@ -45,8 +45,7 @@
     st))
 
 ;; Can be generated with `links --print-keywords`.
-;; TODO We should do that automatically as part of the build process somehow.
-(defconst links-keywords
+(defconst links-backup-keywords
   '(
     "alien"
     "as"
@@ -120,6 +119,34 @@
     "where"
     "with"
     ))
+
+;;; Added by yung-turabian 2025
+(defconst links-keywords
+  ; Not the best test
+  (if (string-equal
+        (shell-command-to-string (concat links-executable " --version"))
+       "Links version 0.9.9 (Burghmuirhead)\n"
+       )
+  (split-string
+   (shell-command-to-string (concat links-executable " --print-keywords"))
+   "\n" " ")
+  links-backup-keywords)
+  )
+
+
+;;; Added by yung-turabian 2025
+(defconst links-keywords
+  ; Not the best test
+  (if (string-equal
+        (shell-command-to-string (concat links-executable " --version"))
+       "Links version 0.9.9 (Burghmuirhead)\n"
+       )
+  (split-string
+   (shell-command-to-string (concat links-executable " --print-keywords"))
+   "\n" " ")
+  links-backup-keywords)
+  )
+
 
 (defconst links-font-lock-keywords
   (list
