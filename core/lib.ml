@@ -35,7 +35,7 @@ type primitive =
 [ Value.t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t Lwt.t ]
 
-type pure = PURE | IMPURE
+type pure = PURE | IMPURE | F2 of (Value.t -> Value.t -> pure)
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
@@ -47,18 +47,33 @@ let mk_binop_fn impl unbox_fn constr = function
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
-  datatype "(Int, Int) -> Int",
+  datatype "(a::Numeric, a) -> Int",
   pure
 
 let float_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_float (fun x -> `Float x))),
-  datatype "(Float, Float) -> Float",
+  datatype "(a::Numeric, a) -> Float",
   pure
 
 let string_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_string (fun x -> `String x))),
   datatype "(String, String) -> String",
   pure
+
+let numeric_op impli implf purei puref : located_primitive * Types.datatype * pure =
+  (`PFun (fun _ args -> match args with
+  | [x; y] -> 
+        (match (x,y) with
+          | (`Int _, `Int _) -> Lwt.return (`Int (impli (Value.unbox_int x) (Value.unbox_int y)))
+          | (`Float _, `Float _) -> Lwt.return (`Float (implf (Value.unbox_float x) (Value.unbox_float y)))
+        | _ -> raise (runtime_type_error "type error in numeric operation")) 
+  | _ -> raise (internal_error "arity error in numeric operation"))),
+  datatype "(a::Numeric, a) -> a",
+  F2 (fun l r -> match (l, r) with
+          | (`Int _, `Int _) -> purei
+          | (`Float _, `Float _) -> puref
+          | _ -> raise (internal_error ("cannot establish purity in numeric operations"))
+  )
 
 let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = function
     | [x] -> box (conv (unbox x))
@@ -228,18 +243,22 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
 
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
-  "+", int_op (+) PURE;
-  "-", int_op (-) PURE;
-  "*", int_op ( * ) PURE;
-  "/", int_op (/) IMPURE;
-  "^", int_op pow PURE;
-  "mod", int_op (mod) IMPURE;
-  "+.", float_op (+.) PURE;
-  "-.", float_op (-.) PURE;
-  "*.", float_op ( *.) PURE;
-  "/.", float_op (/.) PURE;
-  "^.", float_op ( ** ) PURE;
-  "^^", string_op ( ^ ) PURE;
+  "+", numeric_op ( + ) ( +. ) PURE PURE;
+  "-", numeric_op ( - ) ( -. ) PURE PURE;
+  "*", numeric_op ( * ) ( *. ) PURE PURE;
+  "/", numeric_op ( / ) ( /. ) IMPURE PURE;
+  "^", numeric_op (pow) ( ** ) PURE PURE;
+
+  "mod",       int_op     ( mod ) IMPURE;
+
+  (* for backwards compatability *)
+  "+.",        float_op   ( +. )  PURE;
+  "-.",        float_op   ( -. )  PURE;
+  "*.",        float_op   ( *.)   PURE;
+  "/.",        float_op   ( /. )  PURE;
+  "^.",        float_op   ( ** )  PURE;
+
+  "^^",        string_op  ( ^ )   PURE;
 
   "max_int",
   (Value.box_int max_int,
@@ -718,7 +737,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "print",
   (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
-   (* datatype "(String) ~> ()", *)
    datatype "(String) ~> ()",
   IMPURE);
 
@@ -732,7 +750,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "negate",
-  (p1 (Value.unbox_int ->- (~-) ->- Value.box_int), datatype "(Int) -> Int",
+  (p1 (fun i -> match i with
+  | `Int _ -> Value.box_int (- (Value.unbox_int i))
+  | `Float _ -> Value.box_float (-. (Value.unbox_float i))
+  | _ -> raise (runtime_type_error ("Cannot negate: " ^ Value.string_of_value i))), 
+  datatype "(a::Numeric) -> a",
+  PURE);
+
+  "negatei",
+  (p1 (fun i -> Value.box_int (- (Value.unbox_int i))), datatype "(Int) -> Int",
   PURE);
 
   "negatef",
