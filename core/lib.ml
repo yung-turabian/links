@@ -1467,21 +1467,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (p1 (fun s -> match s with
           | `String s -> `Int (String.length s)
           |  _ -> raise (runtime_type_error "strlen got wrong arguments")),
-    datatype ("(String) ~> Int "),
+    datatype ("(String) ~> Int"),
     PURE));
 
   ("strescape",
    (p1 (function
           | `String s -> `String (String.escaped s)
           | _ -> raise (runtime_type_error "strescape got wrong arguments")),
-   datatype ("(String) ~> String "),
+   datatype ("(String) ~> String"),
    IMPURE));
 
   ("strunescape",
    (p1 (function
           | `String s -> `String (Scanf.unescaped s)
           | _ -> raise (runtime_type_error "Internal error: strunescape got wrong arguments")),
-   datatype ("(String) ~> String "),
+   datatype ("(String) ~> String"),
    IMPURE));
 
    ("strContains",

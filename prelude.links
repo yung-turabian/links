@@ -337,6 +337,19 @@ fun intercalate(bone, rushes) {
   }
 }
 
+# Effectively a shortcut for implode(reverse(character_array))
+sig strrev : (String) ~> String
+fun strrev(s) {
+  
+  fun aux(cs, rev) {
+    switch(cs) {
+      case []   -> implode(rev)
+      case c::cs -> aux(cs, c::rev)
+    }
+  }
+  aux(explode(s), [])
+}
+
 sig unlines : ([String]) ~> String
 fun unlines(ws) {
   implode(intercalate(explode("\n"), map(explode, ws)))
@@ -347,8 +360,35 @@ fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
 
-# lines :: String -> [String]
-# words :: String -> [String]
+fun strtok(s, r) {
+  var cs = explode(s);
+  fun aux(cs, w, ws, r) {
+    switch(cs) {
+      case []     -> 
+        if (w <> []) 
+          reverse(strrev(implode(w))::ws)
+        else
+          reverse(ws)
+      case c::cs  -> 
+        if (c == r) 
+          aux(cs, [], strrev(implode(w))::ws, r)
+        else
+          aux(cs, c::w, ws, r)
+    }
+  }
+
+  aux(cs, [], [], r)
+}
+
+sig lines : (String) ~> [String]
+fun lines(s) {
+  strtok(s, '\n')
+}
+
+sig words : (String) ~> [String]
+fun words(s) {
+  strtok(s, ' ')
+}
 
 ### Defined internally to Links:
 # ceiling :: Float -> Int
@@ -1247,7 +1287,7 @@ fun choice (items) {
   choiceDefault(items, selected)
 }
 
-typename Either (a,b) = [|Left:a | Right : b|];
+typename Either (a,b) = [|Left: a | Right: b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.
