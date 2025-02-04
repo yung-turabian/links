@@ -104,8 +104,8 @@ let is_anonymous stv =
 
 (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
 let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
-      (name, (Some pk_type, subkind), freedom)
+  (*| name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
+      (name, (Some pk_type, subkind), freedom)*)
   | v -> v
 
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Kind.t  * Freedom.t) option =

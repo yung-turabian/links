@@ -103,7 +103,7 @@ let is_resolved = function
 let mk_unresolved name ?(is_eff=false) subkind_opt freedom_opt =
   TUnresolved (name, (is_eff, subkind_opt), freedom_opt)
 
-let mk_resolved_tye point : t =
+let mk_resolved_type point : t =
   TResolvedType point
 
 let mk_resolved_row point : t =
