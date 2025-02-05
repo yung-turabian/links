@@ -1,6 +1,7 @@
 typename Id(a, e) = (a) ~e~> a;
 
+
 sig id : Id(a, e)
 fun id(x) { x }
 
-id(4)
+#id(4)

@@ -1186,6 +1186,7 @@ kinded_type_var:
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
+(* in the face of kind inferencing, this is a way to sidestep ambiguity *)
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
 | braced_fieldspec                                             { Datatype.Presence $1 }
