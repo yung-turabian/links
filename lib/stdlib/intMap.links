@@ -1,0 +1,102 @@
+# intMap* -- emulates Haskell's IntMap
+# Adopted from an example game on the Links site
+
+typename IntMap(a) = [(Int, a)];
+
+fun intMapFromList (l) {
+    l
+}
+
+fun intMapToList (im) {
+    im
+}
+
+fun intMapDelete (i, im) {
+    fun aux (i, im2, t) {
+        switch (im2) {
+               case [] -> im
+               case x::xs -> if (x.1 == i) t ++ xs
+                             else aux(i, xs, t ++ [x]) #could optimize here by doing x::t
+        }
+    }
+
+    aux(i, im, [])
+}
+
+# REVIEW BELOW
+
+fun intMapAt(im: IntMap(a), i) {
+    (im !! i).2
+}
+
+fun intMapElems(im: IntMap(a)) {
+    var (_, elems) = unzip(im);
+    # ELEMENTS SHOULD BE RETURNED IN ASCENDING ORDER OF KEYS
+    elems
+}
+
+fun intMapUpdateWithKey(f, i, im) {
+    fun h(f, i, im2, t) {
+        switch (im2) {
+            case [] -> im
+            case x::xs ->
+                if (i == x.1) {
+                    var newValue = f(x.1, x.2);
+                    switch (newValue) {
+                        case Nothing -> intMapDelete(i, im)
+                        case Just(y) -> t ++ [(i, y)] ++ xs
+                    }
+                } else {
+                    h(f, i, xs, t ++ [x])
+                }
+        }
+    }
+
+    h(f, i, im, [])
+}
+
+fun intMapUpdate(f, i, im) {
+    intMapUpdateWithKey(fun(_, x) { f(x) }, i, im)
+}
+
+fun intMapAdjustWithKey(f, i, im) {
+    intMapUpdateWithKey(fun (k, x) { Just(f(k, x)) }, i, im)
+}
+
+fun intMapAdjust(f, i, im) {
+    intMapAdjustWithKey(fun (_, x) { f(x) }, i, im)
+}
+
+fun intMapInsert(i, v, im) {
+    fun h(i, v, im2, t) {
+        switch (im2) {
+            case [] -> (i, v)::im
+            case x::xs ->
+                if (i == x.1) t ++ [(i, v)] ++ xs
+                else h(i, v, xs, t ++ [x])
+        }
+    }
+
+    h(i, v, im, [])
+}
+
+fun intMapFilter(p, im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs)
+    }
+}
+
+fun intMapKeys(im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> (x.1)::intMapKeys(xs)
+    }
+}
+
+fun intMapLookup(i, im) { # dummy
+    switch (im) {
+        case [] -> Nothing
+        case x::xs -> if (x.1 == i) Just(x.2) else intMapLookup(i, xs)
+    }
+}

@@ -293,6 +293,10 @@ fun dropWhile(pred, list) {
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
 # zipWith :: ((a) -> b -> c) -> ([a]) -> [b] -> [c]
 
+### MATH ###
+
+var pi = 3.14159265359;
+
 # div :: Int -> Int -> Int
 # gcd :: Int -> Int -> Int
 # rem :: Int -> Int -> Int
