@@ -28,6 +28,14 @@ let stdlib_path =
             |> convert Utility.(Sys.expand ->- some)
             |> sync)
 
+(* Prelude modules path *)
+(* No use_ because we are going to always want to use this. *)
+let prelude_mods_path =
+  Settings.(option ~default:(Some Linkspath.prelude_mods) "prelude_mods"
+            |> to_string from_string_option
+            |> convert Utility.(Sys.expand ->- some)
+            |> sync)
+
 let module_sep = "."
 
 type term_shadow_table = string list stringmap
@@ -55,9 +63,18 @@ let try_parse_file filename =
     else []
   in
 
+  let poss_prelude_mods =
+    match Settings.get prelude_mods_path with
+    | None ->
+      let chopped_path = check_n_chop @@ locate_file "prelude_mods" in
+      [Filename.concat chopped_path "prelude_mods"]
+    | Some prelude_mods_path ->
+        [check_n_chop prelude_mods_path]
+  in
+
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+    "" :: poss_prelude_mods @ poss_stdlib_dir @ (List.map (check_n_chop) paths)
   in
 
   (* Loop through, trying to open the module with each path *)
@@ -104,12 +121,13 @@ type module_info = {
     simple_name : string; (* Note: not fully-qualified *)
     inner_modules : string list;
     type_names : string list;
+    subkind_names : string list;
     decl_names : string list
   }
 
-let make_module_info simple_name inner_modules type_names decl_names =
+let make_module_info simple_name inner_modules type_names subkind_names decl_names =
   { simple_name = simple_name; inner_modules = inner_modules;
-    type_names = type_names; decl_names = decl_names }
+    type_names = type_names; subkind_names = subkind_names; decl_names = decl_names }
 
 let get_pat_vars () =
   object(self)
@@ -184,11 +202,11 @@ let create_module_info_map program =
     (* Recursively traverse a list of modules *)
     let rec traverse_modules = function
       | [] -> []
-      | {node=Module { binder; members };_} :: bs ->
+      | {node=Module { module_binder; module_members };_} :: bs ->
           (* Recursively process *)
-          let submodule_name = Binder.to_name binder in
+          let submodule_name = Binder.to_name module_binder in
           let new_path = if name = "" then [] else parent_path @ [name] in
-          create_and_add_module_info new_path submodule_name members;
+          create_and_add_module_info new_path submodule_name module_members;
           (* Add the name to the list, process remainder. *)
           submodule_name :: (traverse_modules bs)
       | _bs -> assert false in (* List should only contain modules *)
@@ -215,6 +233,13 @@ let create_module_info_map program =
                 ns @ (get_type_names bs)
             | _ -> get_type_names bs in
 
+    (* Getting subkind names *)
+    let rec get_subkind_names = function
+    | [] -> []
+    | { node = Class c; _ } :: bs ->
+        (Class.name c) :: get_binding_names bs
+    | _ :: bs -> get_subkind_names bs in
+
     (* Gets data constructors for variants *)
     let get_constrs bs = ((get_data_constructors StringSet.empty)#list
         (fun o -> o#binding) bs)#get_constrs in
@@ -226,9 +251,10 @@ let create_module_info_map program =
     let constrs = get_constrs other_bindings in
     let binding_names = get_binding_names other_bindings @ constrs in
     let type_names = get_type_names other_bindings in
+    let subkind_names = get_subkind_names other_bindings in
     (* Finally, construct the module info, and add to the table. *)
     let path_str = make_path_string parent_path name in
-    let mod_info = make_module_info name inner_module_names type_names binding_names in
+    let mod_info = make_module_info name inner_module_names type_names subkind_names binding_names in
     add_module_info path_str mod_info in
 
   (* Toplevel *)
@@ -240,6 +266,7 @@ let print_mod_info k mi =
    printf "MODULE: %s\n" k;
    printf "Inner modules: %s\n" (print_list mi.inner_modules);
    printf "Type names: %s\n" (print_list mi.type_names);
+   printf "Subkind names: %s\n" (print_list mi.subkind_names);
    printf "Decl names: %s\n" (print_list mi.decl_names)
 
 let _print_mt mt =

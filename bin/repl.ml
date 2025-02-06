@@ -83,11 +83,12 @@ let print_value rtype value =
 
 (** Interactive loop *)
 let welcome_note =
-" _     _ __   _ _  __  ___\n\
- / |   | |  \\ | | |/ / / ._\\\n\
- | |   | | , \\| |   /  \\  \\\n\
- | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
- |_____|_|_| \\__|_| \\_|____/\n\
+" _     _____ _   _  _   __ _____ 
+| |   |_   _| \\ | || | / //  ___|
+| |     | | |  \| || |/ / \\ `--. 
+| |     | | | . ` ||    \\  `--. \\
+| |_____| |_| |\\  || |\\  \/\__/ /
+\_____/\___/\_| \_/\_| \_/\____/ 
 Welcome to Links version " ^ (Utility.val_of (Settings.get BS.version)) ^ "\n"
 let welcome_note = Settings.(option ~default:(Some welcome_note) ~readonly:true "welcome_note"
                              |> privilege `System
@@ -134,6 +135,22 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         "quit",
         (perform (fun _ -> exit 0),
          "exit the interpreter");
+
+        (*"subkindenv",
+        ((fun context  _ ->
+          let skenv =
+            let tenv = Context.typing_environment context in
+            tenv.Types.subkind_env
+          in
+          StringSet.iter
+            (fun k ->
+              let t = Env.String.find k skenv in
+              Printf.fprintf stderr " %-16s : %s\n" k
+                (Types.string_ t))
+            (StringSet.diff (Env.String.domain skenv)
+              (Env.String.domain Lib.type_env));
+          context),
+        "display the current subkind environment");*)
 
         "typeenv",
         ((fun context  _ ->
@@ -219,13 +236,13 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
 
         "withtype",
         ((fun context args ->
-          let tenv, aliases =
+          let tenv, aliases, subkinds =
             let tyenv = Context.typing_environment context in
-            tyenv.Types.var_env, tyenv.Types.tycon_env
+            tyenv.Types.var_env, tyenv.Types.tycon_env, tyenv.Types.subkind_env
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
-          | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read ~subkinds ~aliases (String.concat " " args) in
                  StringSet.iter
                    (fun id ->
                      try begin

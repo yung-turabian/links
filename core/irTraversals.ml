@@ -505,9 +505,16 @@ struct
                 defs in
             let defs = List.rev defs in
               o, Rec defs
-        | Alien ({ binder; _ } as payload) ->
-            let o, binder = o#binder binder in
-            o, Alien { payload with binder}
+        | Alien ({ alien_binder; _ } as payload) ->
+            let o, alien_binder = o#binder alien_binder in
+            o, Alien { payload with alien_binder}
+        | CFun b ->
+          let o, bndr = o#binder b in
+          o, CFun (bndr)
+        | CInst (x, (op, tyvars, tc)) ->
+          let o, x = o#binder x in
+          let o, tc, _ = o#tail_computation tc in
+            o, CInst (x, (op, tyvars, tc))        
         | Module (name, defs) ->
             let o, defs =
               match defs with

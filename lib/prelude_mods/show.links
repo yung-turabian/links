@@ -1,0 +1,12 @@
+class Show : (a) {
+		sig `show` : (a) ~> String;
+}
+
+instance Show : Bool {
+		`show` : fun (x) { if (x == true) "True" else "False" };
+}
+
+instance Show : Int {
+		`show` : intToString;
+}
+

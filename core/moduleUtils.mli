@@ -4,7 +4,8 @@ type module_info = {
     simple_name : string; (* Note: not fully-qualified *)
     inner_modules : string list;
     type_names : string list;
-    decl_names : string list
+    subkind_names : string list;
+    decl_names : string list;
   }
 
 type term_shadow_table = string list stringmap

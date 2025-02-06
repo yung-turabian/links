@@ -179,6 +179,8 @@ val is_field_spec_body : field_spec -> bool
 
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
+  val name : Name.t
+
   val type_satisfies : datatype -> bool
   val row_satisfies : row -> bool
 
@@ -197,13 +199,30 @@ module type Constraint = sig
   val make_row : row -> unit
 end
 
+module DynamicConstraint : sig
+  val create : Name.t -> unit
+  val update : Name.t -> typ -> unit
+end
+
+module ConstraintEnv : sig
+  (** A registry for managing constraint modules *)
+  val constraints : (string, (module Constraint)) Hashtbl.t
+    
+  (** Register a new constraint with the given name *)
+  val register : ?replace:bool -> string -> (module Constraint) -> unit
+
+  (** Retrieve a constraint by name *)
+  val find : string -> (module Constraint) option
+end
+
 module Base : Constraint
 module Unl : Constraint
 module Session : Constraint
 module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
-val get_restriction_constraint : Restriction.t -> (module Constraint) option
+val get_constraint : Restriction.t -> (module Constraint) option
+val add_constraint : ?replace:bool -> string -> (module Constraint) -> unit
 
 val dual_row : row -> row
 val dual_type : datatype -> datatype
@@ -214,16 +233,23 @@ type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
-]
+] [@@deriving show]
 
-type environment        = datatype Env.String.t
-type tycon_environment  = tycon_spec Env.String.t
-type typing_environment = { var_env    : environment ;
-                            rec_vars   : Utility.StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_row : row ;
-                            cont_lin   : int ;
-                            desugared  : bool }
+type subkind_spec = [
+  | `Decl of PrimaryKind.t option * Subkind.t
+  | `Class of ((PrimaryKind.t option * Subkind.t) * Quantifier.t list * datatype Utility.StringMap.t)
+] [@@deriving show]
+
+type environment         = datatype Env.String.t
+type tycon_environment   = tycon_spec Env.String.t
+type subkind_environment = subkind_spec Env.String.t
+type typing_environment  = { var_env     : environment ;
+                             rec_vars    : Utility.StringSet.t ;
+                             tycon_env   : tycon_environment ;
+                             subkind_env : subkind_environment ;
+                             effect_row  : row ;
+                             cont_lin    : int ;
+                             desugared   : bool }
 
 val empty_typing_environment : typing_environment
 
@@ -471,6 +497,7 @@ sig
     method typ : typ -> ('self_type * typ)
     method row : row -> ('self_type * row)
     method row_var : row_var -> ('self_type * row_var)
+    method session : session_type -> ('self_type * session_type)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
     method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
     method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)

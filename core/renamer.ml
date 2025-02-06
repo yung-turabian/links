@@ -130,7 +130,36 @@ let renamer qs_from qs_to =
           o, (Val ((pat', (tyvars, phrase'), loc', signature')))
       | other -> super#bindingnode other
 
+  
+  (*method! subkind_class_definition :
+          subkind_class_definition -> 'self * subkind_class_definition
+    = fun { class_binder
+          ; class_tyvar
+          ; class_methods } ->
 
+    let class_binders, class_datatypes = List.split class_methods in
+    let typs'       = List.map Binder.to_type class_binders in
+
+    let qs          = List.map SugarQuantifier.get_resolved_exn class_tyvar in
+    let maps        = shadow_vars maps qs in
+    let _, typs' = (renaming_type_visitor maps)#list 
+      (fun visitor typ -> visitor#typ typ) 
+      typs'
+    in
+    let o, old_maps = o#with_maps maps in
+    let o, class_datatypes = o#list (fun o -> o#datatype') class_datatypes in
+    let o              = o#set_maps old_maps in
+
+    let class_binders = List.map2 Binder.set_type class_binders typs' in
+    let class_methods' =  zip class_binders class_datatypes in
+
+    let subkind_class_definition' =
+      { class_binder
+      ; class_tyvar
+      ; class_methods = class_methods' } in
+    o, subkind_class_definition' 
+
+*)
    method! function_definition :
            function_definition -> 'self * function_definition
      = fun { fun_binder

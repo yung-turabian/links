@@ -161,8 +161,8 @@ let rigidify_type_arg : type_arg -> unit =
 let mono_type_args : type_arg -> unit =
   let check_sk point =
     match Unionfind.find point with
-    | Var (var, (primary_kind, (lin, Restriction.Mono)), `Flexible) ->
-       Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Any)), `Flexible))
+    | Var (var, (primary_kind, (lin, "Mono")), `Flexible) ->
+       Unionfind.change point (Var (var, (primary_kind, (lin, "Any")), `Flexible))
     | _ -> () in
   let open PrimaryKind in
   function

@@ -76,21 +76,19 @@ class map =
       | Project _x -> let _x = o#name _x in Project _x
       | Name _x -> let _x = o#name _x in Name _x
 
-    method subkind : Subkind.t -> Subkind.t = fun x -> x
-
-    method kind : kind -> kind = fun x -> x
+    method kind : SugarKind.t -> SugarKind.t = fun x -> x
 
     method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let name' = o#name name in
            let is_eff' = o#bool is_eff in
-           let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let kind' = o#kind kind in
            let freedom' = o#freedom freedom in
-           TUnresolved (name', (is_eff', subkind_opt'), freedom')
+           TUnresolved (name', (is_eff', kind'), freedom')
         | v -> o#unknown v
 
 
@@ -775,6 +773,16 @@ class map =
          in
          let language = o#foreign_language (Alien.language alien) in
          Foreign (Alien.modify ~declarations ~language alien)
+      | ClassFun f -> 
+        let funs =
+          o#list
+            (fun o (b, dt) ->
+              let b = o#binder b in
+              let dt = o#datatype' dt in
+              (b, dt))
+            (Class.funs f)
+        in
+        ClassFun (Class.modify ~funs f)
       | Import { pollute; path } ->
          Import { pollute; path = o#list (fun o -> o#name) path }
       | Open _xs ->
@@ -783,13 +791,49 @@ class map =
       | Aliases ts ->
           let _x = o#list (fun o -> o#alias) ts in
           Aliases _x
+      | Class c ->
+        let funs =
+          o#list
+          (fun o (b, dt) ->
+            let b = o#binder b in
+            let dt = o#datatype' dt in
+            (b, dt))
+          (Class.funs c)
+        in
+        let name = o#name (Class.name c) in
+        let quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        Class (Class.modify ~name ~quantifiers ~funs c)
+      | ClassDecl (s, qs) -> let (_s, _qs) = o#subkind_class (s, qs) in ClassDecl (_s, _qs)
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let _x = o#name _x in
+        let _x_i1 = o#datatype' _x_i1 in
+        let _x_i2 = 
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let n = o#name n in
+              let qs = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs
+              in
+              let tyargs =
+                o#list 
+                  (fun o -> o#tyarg) 
+                  tyargs
+              in
+              let e = o#phrase e in
+              (n, (qs, tyargs, e))
+            ) 
+            _x_i2
+        in  
+        Instance (_x, _x_i1, _x_i2)
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module { binder; members } ->
-          let binder = o#binder binder in
-          let members = o#list (fun o -> o#binding) members in
-          Module { binder; members }
+      | Module { module_binder; module_members } ->
+          let module_binder = o#binder module_binder in
+          let module_members = o#list (fun o -> o#binding) module_members in
+          Module { module_binder; module_members }
       | AlienBlock alien ->
          let declarations =
            o#list
@@ -822,6 +866,52 @@ class map =
     method alias : alias -> alias =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#aliasnode p
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> (Name.t * SugarQuantifier.t list) =
+      fun (name, quantifiers) ->
+      let name = o#name name in
+      let quantifiers = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      (name, quantifiers)
+
+    (*method subkind_class_definition : subkind_class_definition -> subkind_class_definition 
+      = fun { class_name;
+              class_tyvars;
+              class_methods} ->
+      let class_name = o#name class_name in
+      let class_tyvars = o#list (fun o -> o#quantifier) class_tyvars in
+      let class_methods = 
+        o#list 
+          (fun o (b, dt) ->
+            let b = o#name b in
+            let dt = o#datatype' dt in
+            (b, dt))
+          class_methods
+      in
+      { class_name;
+        class_tyvars;
+        class_methods }*)
+
+    (*method instance_definition : instance_definition -> instance_definition 
+      = fun { instance_binder;
+              instance_type;
+              instance_methods} ->
+      let instance_binder = o#binder instance_binder in
+      let instance_type = o#datatype' instance_type in
+      let instance_methods = o#list 
+          (fun o (op, p) ->
+            let op = o#name op in
+            let p = o#phrase p in
+            (op, p))
+          (instance_methods)
+      in
+      { instance_binder;
+        instance_type;
+        instance_methods; }*)
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -944,19 +1034,17 @@ class fold =
       | Project _x -> let o = o#name _x in o
       | Name _x -> let o = o#name _x in o
 
-    method subkind : Subkind.t -> 'self_type = fun _ -> o
-
-    method kind : kind -> 'self_type = fun _ -> o
+    method kind : SugarKind.t -> 'self_type = fun _ -> o
 
     method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : SugarTypeVar.t -> 'self_type =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let o = o#name name in
            let o = o#bool is_eff in
-           let o = o#option (fun o -> o#subkind) subkind_opt in
+           let o = o#kind kind in
            let o = o#freedom freedom in
            o
         | v -> o#unknown v
@@ -1424,8 +1512,7 @@ class fold =
               let o = o#pattern p in
               let o = o#phrase c in o) body in
             o
-
-
+    
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
         o#list
@@ -1561,6 +1648,12 @@ class fold =
              (Alien.declarations alien)
          in
          o#foreign_language (Alien.language alien)
+      | ClassFun f -> 
+          o#list
+            (fun o (b, dt) ->
+              let o = o#binder b in
+              o#datatype' dt)
+            (Class.funs f)
       | Import { path; _ } ->
          let o = o#list (fun o -> o#name) path in
           o
@@ -1573,9 +1666,9 @@ class fold =
       | Infix { name; _ } ->
          o#name name
       | Exp _x -> let o = o#phrase _x in o
-      | Module { binder; members } ->
-          let o = o#binder binder in
-          o#list (fun o -> o#binding) members
+      | Module { module_binder; module_members } ->
+          let o = o#binder module_binder in
+          o#list (fun o -> o#binding) module_members
       | AlienBlock alien ->
          let o = o#foreign_language (Alien.language alien) in
          o#list
@@ -1583,7 +1676,30 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
-
+      | Class c ->
+        let o = o#name (Class.name c) in
+        let o = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        o#list
+          (fun o (b, dt) ->
+            let o = o#binder b in o#datatype' dt)
+          (Class.funs c)
+      | ClassDecl (s, qs) -> o#subkind_class (s, qs)
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let o = o#name _x in
+        let o = o#datatype' _x_i1 in
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let o = o#name n in
+              let o = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs 
+              (*let o =
+                o#list 
+                (fun o tyarg -> o#tyarg tyarg) 
+                tyargs*)
+              in o#phrase e) 
+          _x_i2
     method binding : binding -> 'self_type =
       WithPos.traverse
         ~o
@@ -1611,6 +1727,47 @@ class fold =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#aliasnode v)
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> 'self_type =
+      fun (name, quantifiers) ->
+      let o = o#name name in
+      let o = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      o
+
+    (*method subkind_class_definition : subkind_class_definition -> 'self
+      = fun { class_name;
+              class_tyvars;
+              class_methods;
+            } ->
+          let o = o#name class_name in
+          let o = o#list (fun o -> o#quantifier) class_tyvars in
+          let o = o#list 
+            (fun o (b, dt) ->
+              let o = o#name b in
+              o#datatype' dt)
+            class_methods
+          in
+          o*)
+
+    (*method instance_definition : instance_definition -> 'self
+    = fun { instance_binder;
+        instance_type;
+        instance_methods
+          } ->
+        let o = o#binder instance_binder in
+        let o = o#datatype' instance_type in 
+        let o = o#list 
+          (fun o (op, p) ->
+            let o = o#name op in
+            o#phrase p)
+          (instance_methods)
+        in
+        o*)
 
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
@@ -1727,21 +1884,19 @@ class fold_map =
       | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
       | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method subkind : Subkind.t -> ('self_type * Subkind.t) = fun k -> (o, k)
-
-    method kind : kind -> ('self_type * kind) = fun k -> (o, k)
+    method kind : SugarKind.t -> ('self_type * SugarKind.t) = fun k -> (o, k)
 
     method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let o, name' = o#name name in
            let o, is_eff' = o#bool is_eff in
-           let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let o, kind' = o#kind kind in
            let o, freedom' = o#freedom freedom in
-           o, TUnresolved (name', (is_eff', subkind_opt'), freedom')
+           o, TUnresolved (name', (is_eff', kind'), freedom')
         | v -> o#unknown v
 
 
@@ -2505,6 +2660,16 @@ class fold_map =
          in
          let o, language = o#foreign_language (Alien.language alien) in
          o, Foreign (Alien.modify ~declarations ~language alien)
+      | ClassFun f -> 
+        let o, funs =
+          o#list
+            (fun o (b, dt) ->
+              let o, b = o#binder b in
+              let o, dt = o#datatype' dt in
+              o, (b, dt))
+            (Class.funs f)
+        in
+        o, ClassFun (Class.modify ~funs f)
       | Import { pollute; path } ->
           let (o, path') = o#list (fun o n -> o#name n) path in
           (o, Import { pollute; path = path' })
@@ -2518,10 +2683,48 @@ class fold_map =
          let (o, name) = o#name name in
          (o, Infix { name; assoc; precedence })
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module { binder; members } ->
-          let (o, binder) = o#binder binder in
-          let (o, members) = o#list (fun o -> o#binding) members in
-          (o, (Module { binder; members }))
+      | Module { module_binder; module_members } ->
+          let (o, module_binder) = o#binder module_binder in
+          let (o, module_members) = o#list (fun o -> o#binding) module_members in
+          (o, (Module { module_binder; module_members }))
+      | Class c ->
+        let o, name = o#name (Class.name c) in
+        let o, quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        let o, funs =
+          o#list
+          (fun o (b, dt) ->
+            let o, b = o#binder b in
+            let o, dt = o#datatype' dt in
+            o, (b, dt))
+          (Class.funs c)
+        in
+        o, Class (Class.modify ~name ~quantifiers ~funs c)
+      | ClassDecl (s, qs) ->
+        let o, (_s, _qs) = o#subkind_class (s, qs) in
+        (o, ClassDecl (_s, _qs))
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let o, _x = o#name _x in
+        let o, _x_i1 = o#datatype' _x_i1 in
+        let o, _x_i2 = 
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let o, n = o#name n in
+              let o, qs = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs
+              in
+              let o, tyargs = 
+                o#list 
+                  (fun o tyarg -> o#tyarg tyarg) 
+                  tyargs
+              in
+              let o, e = o#phrase e in
+              o, (n, (qs, tyargs, e))
+            ) 
+            _x_i2
+        in  
+        o, Instance (_x, _x_i1, _x_i2)
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
          let o, declarations =
@@ -2562,6 +2765,54 @@ class fold_map =
       function
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
         | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> ('self_type * (Name.t * SugarQuantifier.t list)) =
+      fun (name, quantifiers) ->
+      let o, name = o#name name in
+      let o, quantifiers = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      (o, (name, quantifiers))
+
+    (*method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
+      = fun { class_name;
+              class_tyvars;
+              class_methods
+            } ->
+          let o, class_name = o#name class_name in
+          let o, class_tyvars = o#list (fun o -> o#quantifier) class_tyvars in
+          let o, class_methods = o#list
+              (fun o (b, dt) ->
+                let o, b = o#name b in
+                let o, dt = o#datatype' dt in
+                o, (b, dt))
+              class_methods
+          in
+          (o, { class_name;
+                class_tyvars;
+                class_methods})*)
+
+
+    (*method instance_definition : instance_definition -> 'self * instance_definition
+    = fun { instance_binder;
+        instance_type;
+        instance_methods
+          } ->
+        let o, instance_binder = o#binder instance_binder in
+        let o, instance_type = o#datatype' instance_type in 
+        let o, instance_methods = o#list
+            (fun o (op, p) ->
+              let o, op = o#name op in
+              let o, p = o#phrase p in
+              o, (op, p))
+              instance_methods
+        in
+        (o, { instance_binder;
+        instance_type;
+        instance_methods})*)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

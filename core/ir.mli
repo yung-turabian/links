@@ -69,6 +69,12 @@ and fun_def =
     fn_location : location;
     fn_unsafe   : bool
   }
+and alien_def =
+  { 
+    alien_binder: binder;
+    language: ForeignLanguage.t;
+    object_name: string 
+  }
 and temporal_update =
   | ValidTimeUpdate of valid_time_update
   | TransactionTimeUpdate
@@ -93,10 +99,10 @@ and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
   | Rec        of fun_def list
-  | Alien      of { binder: binder;
-                    language: ForeignLanguage.t;
-                    object_name: string }
+  | Alien      of alien_def
   | Module     of string * binding list option
+  | CFun       of binder
+  | CInst      of binder * (language * tyvar list * tail_computation)
 and special =
   | Wrong      of Types.t
   | Database   of value

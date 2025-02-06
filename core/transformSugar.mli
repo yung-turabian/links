@@ -45,6 +45,8 @@ object ('self)
   method with_formlet_env : Types.environment -> 'self
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
+  method bind_subkind    : string -> Types.subkind_spec -> 'self
+  method unbind_var      : string -> 'self
   method bind_binder     : Binder.with_pos -> 'self
 
   method lookup_type     : Name.t -> Types.datatype
@@ -74,6 +76,7 @@ object ('self)
   method datatype'        : datatype' -> 'self * datatype'
   method lens_type        : Lens.Type.t -> 'self * Lens.Type.t
   method row              : Types.row -> 'self * Types.row
+  method kind             : SugarKind.t -> 'self * SugarKind.t
 
   method patternnode     : Pattern.t -> 'self * Pattern.t
   method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos

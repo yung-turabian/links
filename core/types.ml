@@ -9,7 +9,6 @@ let internal_error message =
 let tag_expectation_mismatch =
   internal_error "Type tag expectation mismatch"
 
-
 let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
 
 module FieldEnv = Utility.StringMap
@@ -58,15 +57,15 @@ let process  = {
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [pk_type, (lin_unl, res_any)] ;
+  arity      = [pk_type, default_subkind] ;
 }
 
 (* WR: used by DB queries *)
 let mapentry = {
   Abstype.id = "MapEntry" ;
   name       = "MapEntry" ;
-  arity      = [pk_type, (lin_unl, res_any)
-               ;pk_type, (lin_unl, res_any)] ;
+  arity      = [pk_type, default_subkind
+               ;pk_type, default_subkind] ;
 }
 
 let event    = {
@@ -88,14 +87,14 @@ let access_point = {
 
 let socket = {
   Abstype.id = "Socket";
-  name = "Socket";
-  arity = []
+  name       = "Socket";
+  arity      = []
 }
 
 let spawn_location = {
   Abstype.id = "Location";
-  name = "Location";
-  arity = []
+  name       = "Location";
+  arity      = []
 }
 
 let transaction_time_data = {
@@ -115,8 +114,8 @@ let valid_time_data = {
  * You need to make sure any code using this type will not be executed. *)
 let wrong = {
   Abstype.id = "Wrong";
-  name = "Wrong";
-  arity = []
+  name       = "Wrong";
+  arity      = []
 }
 
 (* When unifying, we need to keep track of both mu-bound recursive variables
@@ -217,6 +216,11 @@ type tycon_spec = [
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ] [@@deriving show]
 
+type subkind_spec = [
+  | `Decl of PrimaryKind.t option * Subkind.t (** For simple subkind creation without related methods *)
+  | `Class of ((PrimaryKind.t option * Subkind.t) * Quantifier.t list * datatype StringMap.t) (** Subkind class creation, kind & key for methods-map *)
+] [@@deriving show]
+
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
 let fresh_raw_variable () : int =
@@ -235,6 +239,7 @@ sig
     method type_args : type_arg list -> ('self_type * type_arg list)
     method typ : typ -> ('self_type * typ)
     method row : row -> ('self_type * row)
+    method session : session_type -> ('self_type * session_type)
     method row_var : row_var -> ('self_type * row_var)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
     method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
@@ -272,6 +277,9 @@ struct
     method primitive : Primitive.t -> ('self_type * Primitive.t) = fun p -> (o,p)
     method row : row -> ('self_type * row) =
       fun row -> o#typ row
+
+    method session : session_type -> ('self_type * session_type) =
+      fun session_type -> o#typ session_type
 
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var) =
       fun point ->
@@ -419,17 +427,16 @@ struct
          let (o, t') = o#typ t in
          (o, Present t')
       | Absent -> (o, Absent)
-      (* FIXME: change some typs to session_types *)
       | Input (t, s) ->
          let (o, t') = o#typ t in
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Input (t', s'))
       | Output (t, s) ->
          let (o, t') = o#typ t in
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Output (t', s'))
       | Dual s ->
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Dual s')
       | Select r ->
          let (o, r') = o#row r in
@@ -543,6 +550,7 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t = fst
 (** A constraint provides a way of ensuring a type (or row) satisfies the
    requirements of some subkind. *)
 module type Constraint = sig
+  val name : Name.t
   (** Does this type satisfy the requirements of this subkind? *)
   val type_satisfies : typ -> bool
   val row_satisfies : row -> bool
@@ -755,9 +763,117 @@ let make_restriction_transform ?(ensure=false) subkind =
        | (_, _, `Rigid) -> assert ensure
    end)#visitors
 
+module ConstraintEnv = struct
+  let constraints : (string, (module Constraint)) Hashtbl.t = Hashtbl.create 16
+
+  (** Register a full constraint (override if [replace=true]). *)
+  let register ?(replace=false) name (constraint_module : (module Constraint)) =
+    if not replace && Hashtbl.mem constraints name then
+      failwith ("Constraint " ^ name ^ " already registered")
+    else
+      Hashtbl.replace constraints name constraint_module
+
+  (** Get a constraint (returns EmptyConstraint if not found). *)
+  let find name =
+    try Some (Hashtbl.find constraints name)
+    with NotFound _ -> None
+
+  (** Update an existing constraint dynamically. *)
+  let update name ~f =
+    match Hashtbl.find_opt constraints name with
+    | Some (module C : Constraint) ->
+        let new_c = f (module C : Constraint) in
+        Hashtbl.replace constraints name new_c
+    | None -> failwith ("Constraint " ^ name ^ " not found")
+end
+
+
+(** Used in conjunction with the new subkind classes. *)
+module DynamicConstraint = struct
+    module TypSet = Set.Make(struct
+        type t = typ
+            [@@deriving show]
+        let compare = compare
+    end)
+
+  let type_patterns : (string, TypSet.t) Hashtbl.t = Hashtbl.create 16
+
+  let create name =
+    let module Instance = struct
+      let name = name
+
+      module Predicate = struct
+        class klass = object
+          inherit type_predicate as super
+  
+          method! point_satisfies f vars point =
+            match Unionfind.find point with
+            | Recursive _ -> false
+            | _ -> super#point_satisfies f vars point
+  
+          method! type_satisfies _vars = function
+            | Not_typed -> assert false
+            | Var _ | Recursive _ | Closed ->
+              failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+            | _  -> false
+        end
+      end 
+
+      let type_satisfies, row_satisfies = make_restriction_predicate (module Predicate) name false
+      let can_type_be, can_row_be = make_restriction_predicate (module Predicate) name true
+      let make_type, make_row = make_restriction_transform name
+    end in
+    ConstraintEnv.register name (module Instance : Constraint)
+
+    let update name typ =
+      match ConstraintEnv.find name with
+      | Some _ ->
+        let existing = Hashtbl.find_opt type_patterns name 
+                       |> Option.value ~default:TypSet.empty
+        in
+        let known_typs = TypSet.add typ existing in
+        Hashtbl.replace type_patterns name known_typs;
+
+        let module Instance = struct
+          let name = name
+    
+          module Predicate = struct
+            class klass = object
+              inherit type_predicate as super
+    
+              method! point_satisfies f vars point =
+                match Unionfind.find point with
+                | Recursive _ -> false
+                | _ -> super#point_satisfies f vars point
+    
+              method! type_satisfies vars = function
+                | Not_typed -> assert false
+                | Var _ | Recursive _ | Closed ->
+                  failwith "[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)"
+                | (Alias _ | Meta _) as t  -> super#type_satisfies vars t
+                | (Record _ | Variant _) as t -> super#type_satisfies vars t
+                | ForAll ([], t) -> super#type_satisfies vars t
+                | Row _ as t -> super#type_satisfies vars t
+                | Absent -> true
+                | Present t -> if TypSet.mem t known_typs then super#type_satisfies vars t else false
+                | t -> TypSet.mem t known_typs
+            end
+          end
+    
+          let type_satisfies, row_satisfies = make_restriction_predicate (module Predicate) name false
+          let can_type_be, can_row_be = make_restriction_predicate (module Predicate) name true
+
+          let make_type, make_row = make_restriction_transform name
+        end in
+        ConstraintEnv.register ~replace:true name (module Instance : Constraint)
+      | None -> failwith "Attempting to update constraint that doesn't exist"    
+end
+
+
 module Base : Constraint = struct
   open Restriction
   open Primitive
+  let name = "Base"
 
   module BasePredicate = struct
     class klass = object
@@ -794,13 +910,15 @@ module Base : Constraint = struct
     end
   end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) Base false
-  let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) Base true
-  let make_type, make_row = make_restriction_transform Base
+  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) name false
+  let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) name true
+  let make_type, make_row = make_restriction_transform name
 end
 
 (* unl type stuff *)
 module Unl : Constraint = struct
+  let name = "Unl"
+
   class unl_predicate = object(o)
     inherit type_predicate as super
 
@@ -904,6 +1022,8 @@ module Unl : Constraint = struct
 end
 
 module Session : Constraint = struct
+  let name = "Session"
+
   open Restriction
 
   module SessionPredicate = struct
@@ -936,18 +1056,18 @@ module Session : Constraint = struct
     end
   end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) Session false
-  let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) Session true
+  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) name false
+  let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) name true
   let make_type, make_row =
     (object
        inherit type_iter as super
 
        method! visit_var point = function
-         | (_, (_, (_, Session)), _) -> ()
+         | (_, (_, (_, "Session")), _) -> ()
          | (v, (pk, (l, sk)), `Flexible) ->
             begin
-              match Restriction.min sk Session with
-              | Some Session -> Unionfind.change point (Var (v, (pk, (l, Session)), `Flexible))
+              match Restriction.min sk name with
+              | Some name -> Unionfind.change point (Var (v, (pk, (l, name)), `Flexible))
               | _ -> assert false
             end
          | (_, _, `Rigid) -> assert false
@@ -956,9 +1076,12 @@ module Session : Constraint = struct
          | Input _ | Output _ | Choice _ | Select _ | Dual _ | End -> ()
          | ty -> super#visit_type vars ty
      end)#visitors
+
 end
 
 module Mono : Constraint = struct
+  let name = "Mono"
+
   open Restriction
 
      module MonoPredicate = struct
@@ -971,31 +1094,35 @@ module Mono : Constraint = struct
        end
      end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module MonoPredicate) Session false
+  let type_satisfies, row_satisfies = make_restriction_predicate (module MonoPredicate) "Session" false
 
   let can_type_be, can_row_be =
     (object
        inherit MonoPredicate.klass
 
        method! var_satisfies = function
-         | (_, (_, (_, Mono)), _) -> true
+         | (_, (_, (_, "Mono")), _) -> true
          | (_, _, `Rigid) -> true
          | (_, (_, (_, sk)), `Flexible) ->
               (* Mono is substantially more lax - we just require that we can unify with any subkind *)
-              match Restriction.min sk Mono with
+              match Restriction.min sk "Mono" with
               | Some _ -> true
               | None -> false
      end)#predicates
 
-  let make_type, make_row = make_restriction_transform ~ensure:true Mono
+  let make_type, make_row = make_restriction_transform ~ensure:true name
+
 end
 
-let get_restriction_constraint : Restriction.t -> (module Constraint) option =
-  let open Restriction in function
-  | Any | Effect -> None
-  | Base -> Some (module Base)
-  | Session -> Some (module Session)
-  | Mono -> Some (module Mono)
+(** Defaults *)
+let () =
+  ConstraintEnv.register "Base" (module Base);
+  ConstraintEnv.register "Session" (module Session);
+  ConstraintEnv.register "Unl" (module Unl);
+  ConstraintEnv.register "Mono" (module Mono)
+
+let get_constraint = ConstraintEnv.find
+let add_constraint = ConstraintEnv.register
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -1896,7 +2023,7 @@ struct
     | Lolli (f, m, t) ->
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Record row
-      | Variant row -> free_bound_row_type_vars bound_vars row
+    | Variant row -> free_bound_row_type_vars bound_vars row
     | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
     | Lens _ -> []
     | ForAll (tyvars, body) ->
@@ -2299,6 +2426,7 @@ module type PRETTY_PRINTER = sig
   val string_of_type_arg : Policy.t -> names -> type_arg -> string
   val string_of_row_var  : Policy.t -> names -> row_var -> string
   val string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
+  (*val string_of_subkind_spec : Policy.t -> names -> subkind_spec -> string*)
   val string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
   val string_of_presence : Policy.t -> names -> field_spec -> string
 end
@@ -2330,7 +2458,7 @@ struct
     | Function _ | Lolli _ -> true
     | Alias (_, (_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
        begin match ListUtils.last_opt qs with
-       | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+       | Some (PrimaryKind.Row, (_, "Eff")) -> true
        | _ -> false
        end
     | _ -> false
@@ -2392,11 +2520,12 @@ struct
     | Policy.Hide -> (fun _ -> "")
     | Policy.Default ->
        function
-       | (Linearity.Unl, Restriction.Any)     -> ""
-       | (Linearity.Any, Restriction.Any)     -> "Any"
-       | (Linearity.Unl, Restriction.Base)    -> Restriction.to_string res_base
-       | (Linearity.Any, Restriction.Session) -> Restriction.to_string res_session
-       | (Linearity.Unl, Restriction.Effect)  -> Restriction.to_string res_effect
+       | (Linearity.Unl, "Any")     -> ""
+       | (Linearity.Any, "Any")     -> "Any"
+       | (Linearity.Unl, "Base")    -> Restriction.to_string res_base
+       | (Linearity.Any, "Num")    -> "Num"
+       | (Linearity.Any, "Session") -> Restriction.to_string res_session
+       | (Linearity.Unl, "Eff")  -> Restriction.to_string res_effect
        | (l, r) -> full (l, r)
 
   let kind : (policy * names) -> Kind.t -> string =
@@ -2408,18 +2537,19 @@ struct
     | Policy.Hide -> PrimaryKind.to_string k
     | Policy.Default ->
       match (k, sk) with
-      | PrimaryKind.Type, (Linearity.Unl, Restriction.Any) -> ""
-      | PrimaryKind.Type, (Linearity.Unl, Restriction.Base) ->
+      | PrimaryKind.Type, (Linearity.Unl, "Any") -> ""
+      | PrimaryKind.Type, (Linearity.Unl, "Base") ->
          Restriction.to_string res_base
-      | PrimaryKind.Type, (Linearity.Any, Restriction.Session) ->
+      | PrimaryKind.Type, (Linearity.Any, "Num") -> "Num"
+      | PrimaryKind.Type, (Linearity.Any, "Session") ->
          Restriction.to_string res_session
       | PrimaryKind.Type, sk ->
          subkind Policy.({policy with kinds = Full}, vars) sk
-      | PrimaryKind.Row, (Linearity.Unl, Restriction.Any) ->
+      | PrimaryKind.Row, (Linearity.Unl, "Any") ->
          PrimaryKind.to_string pk_row
-      | PrimaryKind.Row, (Linearity.Unl, Restriction.Effect) ->
+      | PrimaryKind.Row, (Linearity.Unl, "Eff") ->
          PrimaryKind.to_string pk_row
-      | PrimaryKind.Presence, (Linearity.Unl, Restriction.Any) ->
+      | PrimaryKind.Presence, (Linearity.Unl, "Any") ->
          PrimaryKind.to_string pk_presence
       | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
          full Policy.({policy with kinds = Full}, vars) (k, sk)
@@ -2958,7 +3088,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
-      primary = PrimaryKind.Row && restriction = Restriction.Effect
+      primary = PrimaryKind.Row && restriction = "Eff"
 
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
     let implicit_allowed_in : typ -> bool
@@ -3495,11 +3625,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
-       | (L.Unl, R.Any)     -> if is_eff && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_eff && lincont_enabled then Empty else constant "Any"
-       | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
-       | (L.Any, R.Session) -> constant @@ R.to_string res_session
-       | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
+       | (L.Unl, "Any")     -> if is_eff && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
+       | (L.Any, "Any")     -> if is_eff && lincont_enabled then Empty else constant "Any"
+       | (L.Unl, "Base")    -> constant @@ R.to_string res_base
+       | (L.Any, "Session") -> constant @@ R.to_string res_session
+       | (L.Unl, "Eff")  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
        | _ -> full_name
 
 
@@ -3526,26 +3656,27 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       match Policy.kinds policy, knd with
       | Policy.Full, _ -> full_name
       | Policy.Hide, _ -> constant (P.to_string primary)
-      | _, (PrimaryKind.Type, (L.Unl, R.Any)) -> Empty
+      | _, (PrimaryKind.Type, (L.Unl, "Any")) -> Empty
       | _ ->
          Printer (fun ctx () buf ->
              (* do simple cases first, match the other stuff later *)
              match primary with
              | P.Type -> begin
                  match subknd with
-                 | L.Unl, R.Any     -> assert false
-                 | L.Unl, R.Base    -> StringBuffer.write buf (R.to_string res_base)
-                 | L.Any, R.Session -> StringBuffer.write buf (R.to_string res_session)
+                 | L.Unl, "Any"     -> assert false
+                 | L.Unl, "Base"    -> StringBuffer.write buf (R.to_string res_base)
+                 | L.Any, "Num"     -> StringBuffer.write buf ("Num")
+                 | L.Any, "Session" -> StringBuffer.write buf (R.to_string res_session)
                  | subknd ->
                     let policy = Policy.set_kinds Policy.Full (Context.policy ctx) in
                     Printer.apply (subkind_name policy subknd) ctx () buf
                end
              | PrimaryKind.Row -> begin
                  match subknd with
-                 | L.Unl, R.Any | L.Unl, R.Effect ->
+                 | L.Unl, "Any" | L.Unl, "Eff" ->
                     if is_eff && lincont_enabled then StringBuffer.write buf (P.to_string pk_row ^ "(Lin)")
                     else StringBuffer.write buf (P.to_string pk_row)
-                 | L.Any, R.Any | L.Any, R.Effect ->
+                 | L.Any, "Any" | L.Any, "Eff" ->
                     (* NOTE: The first branch might not be entirely compatible with value rows. *)
                     if not lincont_enabled then StringBuffer.write buf (P.to_string pk_row)
                     else if is_eff then StringBuffer.write buf (P.to_string pk_row)
@@ -3558,11 +3689,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                end
              | PrimaryKind.Presence -> begin
                  match subknd with
-                 | L.Unl, R.Any ->
+                 | L.Unl, "Any" ->
                     StringBuffer.write buf (P.to_string pk_presence)
-                 | L.Any, R.Effect ->
+                 | L.Any, "Eff" ->
                     StringBuffer.write buf (P.to_string pk_row)
-                 | L.Unl, R.Effect ->
+                 | L.Unl, "Eff" ->
                     (* explicit kinds for linear presence variables *)
                     StringBuffer.write buf (P.to_string pk_presence ^ "(Lin)")
                  | _ ->
@@ -3668,7 +3799,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
                   let ambients = List.map (function
-                                     | (PrimaryKind.Row, (_, Restriction.Effect)) -> Some Context.Effect
+                                     | (PrimaryKind.Row, (_, "Eff")) -> Some Context.Effect
                                      | _ -> None) arg_kinds in
                   Printer.concat_items_with_ambients ~sep:"," type_arg arg_types ambients ctx buf;
                   StringBuffer.write buf ")"))
@@ -4292,24 +4423,29 @@ See Note [Variable names in error messages].
 
  *)
 
-type environment        = datatype Env.t
+type environment         = datatype Env.t
                             [@@deriving show]
-type tycon_environment = tycon_spec Env.t
+type tycon_environment   = tycon_spec Env.t
                             [@@deriving show]
-type typing_environment = { var_env    : environment ;
-                            rec_vars   : StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_row : row;
-                            cont_lin   : int;
-                            desugared  : bool }
+type subkind_environment = subkind_spec Env.t
                             [@@deriving show]
 
-let empty_typing_environment = { var_env    = Env.empty;
-                                 rec_vars   = StringSet.empty;
-                                 tycon_env  = Env.empty;
-                                 effect_row = make_empty_closed_row ();
-                                 cont_lin   = -1;
-                                 desugared  = false }
+type typing_environment  = { var_env     : environment ;
+                             rec_vars    : StringSet.t ;
+                             tycon_env   : tycon_environment ;
+                             subkind_env : subkind_environment ;
+                             effect_row  : row;
+                             cont_lin    : int;
+                             desugared   : bool }
+                             [@@deriving show]
+
+let empty_typing_environment = { var_env     = Env.empty;
+                                 rec_vars    = StringSet.empty;
+                                 tycon_env   = Env.empty;
+                                 subkind_env = Env.empty;
+                                 effect_row  = make_empty_closed_row ();
+                                 cont_lin    = -1;
+                                 desugared   = false }
 
 (* Which printer to use *)
 type pretty_printer_engine = Old | Roundtrip | Derived
@@ -4420,6 +4556,12 @@ let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bo
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_tycon_spec) tycon
 
+(*let string_of_subkind_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> subkind_spec -> string
+  = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) subkind ->
+  let policy = policy () in
+  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [subkind];
+  generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_subkind_spec) subkind*)
+
 let string_of_quantifier : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) q ->
   let policy = policy () in
@@ -4434,14 +4576,15 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; cont_lin = _; desugared = _;  }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; cont_lin = xl; desugared = dr } : typing_environment =
-  { var_env    = Env.extend l r
-  ; rec_vars   = StringSet.union lvars rvars
-  ; tycon_env  = Env.extend al ar
-  ; effect_row = er
-  ; cont_lin   = xl
-  ; desugared  = dr }
+    {var_env = l; rec_vars = lvars; tycon_env = al; subkind_env = lsk; effect_row = _; cont_lin = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; subkind_env = rsk; effect_row = er; cont_lin = xl; desugared = dr } : typing_environment =
+  { var_env     = Env.extend l r
+  ; rec_vars    = StringSet.union lvars rvars
+  ; tycon_env   = Env.extend al ar
+  ; subkind_env = Env.extend lsk rsk
+  ; effect_row  = er
+  ; cont_lin    = xl
+  ; desugared   = dr }
 
 let string_of_environment env = show_environment (Env.map DecycleTypes.datatype env)
 
@@ -4760,9 +4903,9 @@ let make_table_type (t, r, w, n) = Table (t, r, w, n)
 
 (* Alias of more general TemporalTable type *)
 let make_tablehandle_alias (r, w, n) =
-    let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
+    let kind = (pk_type, default_subkind) in
     let kinds = List.init 3 (fun _ -> kind) in
-    let tyargs = List.map (fun x -> (PrimaryKind.Type, x)) [r; w; n] in
+    let tyargs = List.map (fun x -> (pk_type, x)) [r; w; n] in
     Alias (pk_type, ("TableHandle", kinds, tyargs, false),
         Table (Temporality.current, r, w, n))
 

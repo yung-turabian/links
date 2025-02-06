@@ -751,6 +751,7 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 | `Alien
+| `SubkindClassFunction of string
 ]
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
@@ -823,6 +824,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
   | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
   | `Alien -> fprintf ppf "alien"
+  | `SubkindClassFunction name -> fprintf ppf "%s" name
   | `DateTime (Timestamp.Timestamp ts) ->
       (* Default to showing local time representation *)
       p_local_datetime ppf ts
@@ -1159,4 +1161,28 @@ let row_columns_values v =
   in
   (row_columns v, row_values v)
 
-
+  let rec typ : t -> Types.datatype = function
+  | `Bool _ -> Types.bool_type
+  | `Int _ -> Types.int_type
+  | `Float _ -> Types.float_type
+  | `Char _ -> Types.char_type
+  | `String _ -> Types.string_type
+  | `Entry (k, v) -> failwith "Entry"
+  | `Record fields -> 
+    let field_map = List.map (fun (k, v) -> (k, Types.Present (typ v))) fields |> Utility.StringMap.from_alist in
+    Types.make_record_type field_map
+  | `List [] -> Types.make_list_type (Types.empty_type)
+  | `List [v] -> Types.make_list_type (typ v)
+  | `List l -> 
+    (* Already caught malformed lists *)
+    Types.make_list_type (typ (List.hd l))
+  | `ClientDomRef i -> failwith "ClientDomRef"
+  (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
+  | `Variant (_label, (`Record _ as value)) -> (typ value)
+  | `Variant (label, value) -> 
+    let field_map = Utility.StringMap.singleton label (Types.Present (typ value)) in
+    Types.Variant (Types.Row (field_map, Types.closed_row_var, false))
+  | `XML _ -> Types.xml_type
+  | `DateTime _ -> Types.datetime_type
+  | `Database _ -> Types.database_type
+  | _ -> failwith "value.ml; Not implemented this type in the checker."

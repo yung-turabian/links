@@ -23,7 +23,7 @@ let mk_const c = State.return (Ir.Constant c) |> State.return
 let mk_primitive p : Types.datatype t =
   State.return (Types.Primitive p) |> State.return
 
-let default_subkind = Sugartypes.default_subkind
+let default_subkind = CT.default_subkind
 
 let check_assoc_list_for_duplicates assoc description =
   let has_duplicates =

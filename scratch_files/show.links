@@ -1,0 +1,16 @@
+
+# Without <: it will default to super-class of 'Type'
+class Show : a {
+		sig show' : (a) -> String;	
+}
+
+#instance Show : Bool {
+#		show' True  = "True";
+#		show' False = "False";
+#}
+
+
+sig printi : (a::Show) ~> ()
+fun printi(x) {
+		#show'(x)
+}

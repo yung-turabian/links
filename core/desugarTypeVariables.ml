@@ -4,7 +4,7 @@
   {Sugartypes.SugarTypeVar.t} by appropriate TResolved*. The latter contain
   Unionfind points and the pass guarantees that syntactic/unresolved variables
   referring to the same variable will be assigned the same Unionfind point.
-  This pass reports errrors about type variables occuring in positions where
+  This pass reports errors about type variables occuring in positions where
   they are not allowed to (e.g., an unbound, named variable occuring in a
   context where no type variables must be bound implicitly).
   However, see the restriction on anonymous effect variables below.
@@ -16,6 +16,9 @@
   variables, i.e., it leaves them as TUnresolved. Further, it does not report
   errors about such variables in places where they are not allowed.  Both must
   be dealt with later.
+
+  Furthermore all occurences of KUnresolved from {Sugartypes.SugarKind.t}
+  are replaced by appropriate KResolved*
 *)
 
 open CommonTypes
@@ -32,21 +35,36 @@ type tyvar_map_entry =
 
 (**
   Maps used for storing info about type variables.  Note that kinding info is
-  stored both in {Sugartypes.kind} and the meta_*_ Unionfind points of the
+  stored both in {Sugartypes.SugarKind} and the meta_*_ Unionfind points of the
   resolved constructors.  However, in the former, the kinding info is optional,
   whereas it is mandatory in the second. We use the convention that information
-  the information Sugartypes.kind takes precedence over the kinding info in the
+  in Sugartypes.SugarKind takes precedence over the kinding info in the
   Unionfind points. This allows us to properly express the absence of kinding
-  information. Once an entry of Sugartypes.kind is present, it must of course be
+  information. Once an entry of Sugartypes.SugarKinds is resolved, it must of course be
   consistent with the information in the Unionfind point
 *)
 type tyvar_map = tyvar_map_entry StringMap.t
+
+
+type subkind_class_info = {
+  primary_kind: PrimaryKind.t option;
+  subkind: Subkind.t;
+  (** These quantifiers are coming from {!ClassDecl} and should never be
+      set to resolved from {!ClassFun}. *)
+  quantifiers: SugarQuantifier.t list;
+}
+
+(**
+  Map used for storing info about new subkind class quantifiers.
+*)
+type subkind_classes_map = subkind_class_info StringMap.t
 
 let infer_kinds
   = Settings.(flag "infer_kinds"
               |> convert parse_bool
               |> sync)
 
+module SEnv = Env.String
 
 (* Errors *)
 
@@ -101,11 +119,10 @@ let is_anonymous_name name =
 let is_anonymous stv =
   SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
 
-
 (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
 let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
-      (name, (Some pk_type, subkind), freedom)
+  | name, (SugarKind.KResolved (None, subkind)), freedom when not (Settings.get infer_kinds) ->
+      (name, (SugarKind.mk_resolved (Some pk_type) subkind), freedom)
   | v -> v
 
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Kind.t  * Freedom.t) option =
@@ -137,7 +154,7 @@ let sig_allows_implicitly_bound_vars :  datatype' option -> bool  =
   | None -> true
 
 
-let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyvar_map_entry =
+let lookup_tyvar_exn name (map : tyvar_map) : (PrimaryKind.t option * Subkind.t option) * Freedom.t * tyvar_map_entry =
   let extract_freedom =
     (* Consistency check: If the tyvar map contains subkind info,
        then it must coindice with the subkind in the Unionfind point *)
@@ -230,11 +247,23 @@ let resolved_var_of_entry =
 
 
 
-class typevar_visitor initial_map allow_implicits =
+class typevar_visitor initial_map allow_implicits subkind_env =
 object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
   val tyvar_map : tyvar_map = initial_map
+
+  (* New subkinds are resolved here into the environment first. *)
+  val subkind_env : Types.subkind_environment = subkind_env
+
+  method private get_subkind_env = subkind_env
+
+  val subkind_qs_map : subkind_classes_map = StringMap.empty
+
+  method private get_subkind_class = subkind_qs_map
+
+  method set_subkind_class name info = 
+    {< subkind_qs_map = StringMap.add name info subkind_qs_map >}
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
@@ -258,7 +287,7 @@ object (o : 'self)
 
   method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars >}
 
-
+  method set_subkind_env subkind_env = {< subkind_env >}
 
   method bind
            name
@@ -285,9 +314,57 @@ object (o : 'self)
     in
     o, ((pk, sk), fd), cur_entry
 
+  method resolve_kind ?pos ~subkind_env unresolved_kind = 
+    let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
+    let open SugarKind in
+    
+    let get_sk_info (name : string) : (CommonTypes.PrimaryKind.t option * CommonTypes.Linearity.t) =
+      try
+        match (SEnv.find name subkind_env) with
+        | `Decl (pk, (lin, _)) -> pk, lin
+        | `Class ((pk, (lin, _)), _, _) -> pk, lin
+      with NotFound _ ->
+        raise (Errors.unbound_subkind pos name) in
+    
+    let pk_sk = match unresolved_kind with
+    | KResolved (pk, sk) -> (pk, sk)
+    | KUnresolved (None, (None, Some res)) ->
+      let pk, lin = get_sk_info res in
+      (pk, Some (lin, res))
+    | KUnresolved (pk_opt, (None, None)) ->
+      (pk_opt, None)
+    | KUnresolved (Some pk, (Some lin, None)) ->
+      (Some pk, Some (lin, res_any))  
+    | KUnresolved (pk_opt, (lin_opt, Some res)) ->
+      let class_pk, lin = get_sk_info res in
+      let lin = 
+        match lin, lin_opt with
+        | l, None -> l
+        | l, Some l2 -> 
+          if l <> l2 then
+            failwith ("Class requires linearity: " ^ (Linearity.to_string l))
+          else
+            l
+      in
+      let pk = 
+        match class_pk, pk_opt with
+        | None, None -> None
+        | None, Some pk -> Some pk
+        | Some pk, None -> Some pk
+        | Some pk1, Some pk2 -> 
+          if pk1 <> pk2 then
+            failwith ("Class requires primary kind: " ^ (PrimaryKind.to_string pk1))
+          else
+            Some pk1
+      in
+      (pk, Some (lin, res))
 
+    | _ -> raise (Errors.internal_error 
+            ~filename:"desugarTypeVariables.ml" 
+            ~message:"Failed to resolve SugarKind")
+    in
 
-
+    o, pk_sk
 
   (** Used for type/row/presence variables found along the way, including anonymous ones *)
   method add ?pos name (pk : PrimaryKind.t) ?(is_eff=false) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
@@ -307,7 +384,7 @@ object (o : 'self)
         let tv' = (name, (pk_union', sk_union'), freedom') in
         (* check that new info is consistent with existing knowledge *)
         if tv <> tv' then
-          raise (typevar_mismatch SourceCode.Position.dummy tv tv');
+          raise (typevar_mismatch pos tv tv');
 
         (* Check if we learned anything new at all.
            If so, update the entry to put in the tyvar map. This also updates
@@ -349,18 +426,18 @@ object (o : 'self)
       ty
 
 
-  (**  Used for Forall and Typenames *)
-  method quantified : 'a. rigidify:bool -> SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
-    fun ~rigidify unresolved_qs action ->
+  (**  Used for Forall, Typenames and Class functions *)
+  method quantified : 'a. ?pos:SourceCode.Position.t -> rigidify:bool -> SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
+    fun ?pos ~rigidify unresolved_qs action ->
+    let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
     let original_o = o in
     let bind_quantifier (o, names) sq =
       let (name, _, _) as v =
         SugarQuantifier.get_unresolved_exn sq in
-      let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let (_, (pk, sk), freedom) = ensure_kinded v in
+      let (_, kind, freedom) = ensure_kinded v in
+      let o, (pk, sk) = o#resolve_kind ?pos:(Some pos) ~subkind_env kind in
       let freedom = if rigidify then `Rigid else freedom in
-      (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in
       let o' = o#bind name entry in
       let names' = StringSet.add name names in
@@ -385,12 +462,12 @@ object (o : 'self)
     o, resolved_qs, action_result
 
 
-
   method! datatypenode =
     let open Datatype in
     function
     | TypeVar stv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let (name, (is_eff, unresolved_kind), freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let o, (_pk, sk) = o#resolve_kind ~subkind_env unresolved_kind in
        let o, resolved_tv = o#add name pk_type ~is_eff:is_eff sk freedom in
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
@@ -423,14 +500,15 @@ object (o : 'self)
           appear in contexts where implictly scoped variables are allowed.  *)
        o, orig
     | Open srv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let (name, (is_eff, unresolved_kind), freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let o, (_pk, sk) = o#resolve_kind ~subkind_env unresolved_kind in
        let o, resolved_rv = o#add name pk_row ~is_eff:is_eff sk freedom in
        o, Datatype.Open resolved_rv
     | Recursive (stv, r) ->
        let original_o = o in
 
        let name = SugarTypeVar.get_unresolved_name_exn stv in
-       let entry = make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
+       let entry = make_fresh_entry (Some pk_row) (Some default_subkind) `Rigid in
        let o = o#bind name entry in
        let o, t = o#row r in
        let o, _, _ = o#unbind name original_o in
@@ -446,7 +524,8 @@ object (o : 'self)
        let o, t = o#datatype t in
        o, Present t
     | Var utv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn utv in
+       let (name, (is_eff, unresolved_kind), freedom) = SugarTypeVar.get_unresolved_exn utv in
+       let o, (_pk, sk) = o#resolve_kind ~subkind_env unresolved_kind in
        let o, resolved_pv = o#add name pk_presence ~is_eff:is_eff sk freedom in
        o, Var resolved_pv
 
@@ -521,7 +600,7 @@ object (o : 'self)
             rec_unsafe_signature;
             rec_frozen})
 
-
+  
   method! aliasnode (name, unresolved_qs, body) =
 
     (* Don't allow unbound named type variables in type definitions.
@@ -581,7 +660,167 @@ object (o : 'self)
 
        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        (o, b)
+    | ClassDecl (name, qs) -> 
 
+      let o, name = o#name name in
+
+      let make_parents rest = 
+        match rest with
+        | Some r -> 
+          (* This might not be the right thing to do *)
+          if r = "Any" || r = "Mono" then
+            ["Any"; "Mono"] 
+          else
+            [ r ]
+        | None -> ["Any"; "Mono"]
+      in
+
+      let o, unresolved_qs, shared_kind = 
+        match qs with
+        | [] -> 
+            Restriction.add ~parents:["Any"; "Mono"] name;
+            Debug.if_set (CommonTypes.show_subkindclasses)
+              (fun () -> ("New restriction: " ^ name));
+            
+            let kind = (None, (Some lin_unl, Some name)) in
+            o, [], kind 
+        | _ ->
+          let o, unresolved_qs = o#list (fun o q ->
+            let (tyvar_name, kind, fd) = SugarQuantifier.get_unresolved_exn q in
+            match kind with
+              | SugarKind.KResolved (pk, sk) ->
+                let class_subkind = (match pk, sk with
+                | _, None ->
+                    Restriction.add ~parents:["Any"; "Mono"] name;
+                    (lin_unl, name)
+                | _, Some (lin, rest) -> 
+                    let parents = make_parents (Some rest) in
+                    Restriction.add ~parents name;
+                    (lin, name)
+                ) in
+
+                Debug.if_set (CommonTypes.show_subkindclasses)
+                  (fun () -> ("New restriction: " ^ name));
+                Debug.if_set (CommonTypes.show_subkindclasses)
+                  (fun () -> Restriction.to_dot ());
+
+                let kind = SugarKind.mk_resolved pk (Some class_subkind) in
+                o, SugarQuantifier.mk_unresolved tyvar_name kind fd
+              | SugarKind.KUnresolved (pk, (lin, res)) -> 
+                let parents = make_parents res in
+                Restriction.add ~parents name;
+                Debug.if_set (CommonTypes.show_subkindclasses)
+                  (fun () -> ("New restriction: `" ^ name ^"`"));
+                Debug.if_set (CommonTypes.show_subkindclasses)
+                  (fun () -> Restriction.to_dot () );
+                
+                let kind = SugarKind.mk_unresolved pk (lin, Some name) in
+                let q = SugarQuantifier.mk_unresolved tyvar_name kind fd in
+                o, q
+          ) qs
+          in
+          
+          (* Determine shared primary kind, if any *)
+          let shared_kind = 
+            let sugar_kinds = List.map (fun q -> SugarQuantifier.get_unresolved_kind_exn q) unresolved_qs in
+            let pks = List.map (fun k -> SugarKind.get_unresolved_pk_exn k) sugar_kinds in
+            let sks = List.map (fun k -> SugarKind.get_unresolved_sk_exn k) sugar_kinds in
+
+            let pk = 
+              if pks <> [] then
+                match ListUtils.find_fstdiff pks with
+                | Some _ -> 
+                    None
+                | None -> 
+                    (List.hd pks)
+              else
+                None
+            in
+
+            let sk = 
+              if sks <> [] then
+                match ListUtils.find_fstdiff sks with
+                | Some _ -> 
+                  (Some lin_any, Some name)
+                | None -> 
+                  (List.hd sks)
+              else
+                (Some lin_unl, Some name)
+            in
+
+            pk, sk
+        in
+        o, unresolved_qs, shared_kind
+
+      in
+    
+      (* Add all class declaration to the subkind
+       * environment, as mutuals. *)
+      let pk, sk, subkind_env = 
+        let (pk, _) = shared_kind in
+        let sk = 
+          match shared_kind with
+          | _, (Some l, Some r) -> (l, r)
+          | _, _ -> (lin_unl, name)
+        in
+        pk, sk, SEnv.bind name (`Class ((pk, sk), [], StringMap.empty)) subkind_env 
+      in
+
+      let info = {
+        primary_kind = pk;
+        subkind = sk;
+        quantifiers = unresolved_qs
+      } in
+      let o = o#set_subkind_class name info in
+      let o = o#set_subkind_env subkind_env in
+
+      (o, b)
+
+    | ClassFun f ->
+
+      let class_name = (Class.name f) in
+      let fun_name = Binder.to_name (fst (Class.fun' f)) in
+
+      (* Look up the subkind class info *)
+      let class_info = 
+        try StringMap.find class_name subkind_qs_map
+        with NotFound _ -> raise (internal_error ("Subkind class not found: " ^ class_name))
+      in
+      
+      let o = o#set_allow_implictly_bound_vars false in
+      (* Aliases must never use type variables from an outer scope *)
+      let o = o#reset_vars in
+      (* Process the class *)
+      let o, resolved_qs, fun' = o#quantified 
+        ~rigidify:false class_info.quantifiers (fun o' -> 
+          let b, dt = (Class.fun' f) in
+          let o', b = o'#binder b in
+          let o', dt = o'#datatype' dt in
+
+          o', (b, dt)) 
+      in
+
+      let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+      let subkind_env = 
+        (** HACK: we are going to take for granted that signature quantifiers will
+          always be the same. *)
+        let qs = List.map SugarQuantifier.get_resolved_exn resolved_qs in 
+
+        Debug.print ("Class fun `" ^ fun_name ^ "` has quantifiers:");
+        List.iter (fun q -> Debug.print ("\t" ^ (Quantifier.to_string q))) qs;
+
+        let kinds = List.map Quantifier.to_kind qs in
+        (** NOTE: Not binding functions yet as datatypes are not resolved. *)
+        match kinds with
+        | [] -> subkind_env
+        | (pk, (lin, _))::_ ->
+          SEnv.bind class_name (`Class ((Some pk, (lin, class_name)), qs, StringMap.empty)) subkind_env
+      in
+      let o = o#set_subkind_env subkind_env in
+
+      let f = Class.modify ~funs:[fun'] ~quantifiers:resolved_qs f in
+      o, ClassFun f
     | Foreign alien ->
        (* For alien bindings, signature determines whether implicitly
           bound vars are allowed *)
@@ -610,28 +849,28 @@ object (o : 'self)
 end
 
 
-let program p =
-  let v = new typevar_visitor StringMap.empty true in
+let program subkind_env p =
+  let v = new typevar_visitor StringMap.empty true subkind_env in
   snd (v#program p)
 
 
-let sentence =
+let sentence subkind_env =
 
 function
   | Definitions bs ->
-     let v = new typevar_visitor StringMap.empty true in
+     let v = new typevar_visitor StringMap.empty true subkind_env in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
-     let v = new typevar_visitor StringMap.empty true in
+     let v = new typevar_visitor StringMap.empty true subkind_env in
      let _o, p = v#phrase p in
       Expression p
   | Directive   d  ->
      Directive d
 
-let standalone_signature t =
+let standalone_signature subkind_env t =
   let allow_implicits = sig_allows_implicitly_bound_vars (Some (t, None)) in
-  let v = new typevar_visitor StringMap.empty allow_implicits in
+  let v = new typevar_visitor StringMap.empty allow_implicits subkind_env in
   snd (v#datatype t)
 
 
@@ -642,12 +881,16 @@ module Untyped = struct
   let name = "type_variables"
 
   let program state program' =
-    let _tyenv = Context.typing_environment (context state) in
-    let program' = program program' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let subkind_env = tyenv.subkind_env in
+    let program' = program subkind_env program' in
     return state program'
 
   let sentence state sentence' =
-    let _tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence sentence' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let subkind_env = tyenv.subkind_env in
+    let sentence'' = sentence subkind_env sentence' in
     return state sentence''
 end

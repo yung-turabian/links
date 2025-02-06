@@ -1,0 +1,30 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {    
+		"fileGroup.groups": {
+			"Kind Inference Work": {
+			// Kind inference set
+			"files": [ 
+				"${workspaceFolder}/core/commonTypes.ml",
+				"${workspaceFolder}/core/parser.mly",
+				"${workspaceFolder}/core/types.ml",
+				"${workspaceFolder}/core/sugartypes.ml",
+				"${workspaceFolder}/core/sugarTraversals.ml",
+				"${workspaceFolder}/prelude.links",
+				"${workspaceFolder}/core/desugarDatatypes.ml",
+				"${workspaceFolder}/core/desugarTypeVariables.ml"
+			]
+			},
+			"Default": {
+			"files": [
+				"${workspaceFolder}/prelude.links",
+			]
+			}
+		},
+	}
+
+}

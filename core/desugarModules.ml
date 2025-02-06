@@ -11,7 +11,7 @@
  * Desugars modules into plain binders.
  *
  * module Foo {
- *    val bobsleigh = ...;
+ *    var bobsleigh = ...;
  *    fun x() {
  *    }
  *
@@ -20,14 +20,14 @@
  *      }
  *    }
  * }
- * val x = ...;
+ * var x = ...;
  *
  *  --->
  *
- * val Foo_0$bobsleigh_0 = ...;
+ * var Foo_0$bobsleigh_0 = ...;
  * fun Foo_0$x1() { ...}
  * fun Foo_0$Bar_2$y_0() { ... }
- * val x1 = ...;
+ * var x1 = ...;
  *
  * The names are internal. The [Name.prettify] function in
  * [module_hacks.ml] attempts to recover the source representation of
@@ -243,10 +243,10 @@ end
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
   = fun ?(toplevel=false) renamer scope binding ->
   match binding.node with
-  | Module { binder; members } ->
-     let name = Binder.to_name binder in
+  | Module { module_binder; module_members } ->
+     let name = Binder.to_name module_binder in
      let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
-     let bs'    = visitor#bindings members in
+     let bs'    = visitor#bindings module_members in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
@@ -492,8 +492,16 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              Alien.(declarations aliendecls)
          in
          AlienBlock (Alien.modify ~declarations:decls' aliendecls)
-      | Infix { name; assoc; precedence } ->
-         Infix { name = self#fixity name; assoc; precedence }
+      | Class c ->
+        let funs' =
+          self#list
+            (fun o (b, dt) ->
+              let dt = o#datatype' dt in
+              let b = o#binder b in
+              (b, dt))
+            (Class.funs c)
+        in
+        Class (Class.modify ~funs:funs' c)
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 
@@ -538,6 +546,7 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in
+  let program = DesugarSubkindClasses.transform_subkind_classes program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
   let desugar = desugar ~toplevel:true renamer' scope' in
@@ -551,6 +560,7 @@ let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   = fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
   let sentence = DesugarAlienBlocks.sentence sentence in
+  let sentence = DesugarSubkindClasses.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result

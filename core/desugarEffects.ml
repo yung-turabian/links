@@ -259,7 +259,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       with NotFound _ -> raise (Errors.unbound_tycon (SourceCode.WithPos.pos dt) tycon)
     in
     match ListUtils.last_opt param_kinds with
-    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
+    | Some (PrimaryKind.Row, (_, "Eff")) -> Some `Alias
     | _ -> None )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
   | _ -> None
@@ -335,7 +335,7 @@ let cleanup_effects tycon_env =
                | _, [] -> []
                | [], Row t :: ts ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go ([], ts)
-               | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts
+               | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts
                  ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go (qs, ts)
                | (([] as qs) | _ :: qs), t :: ts ->
@@ -380,7 +380,7 @@ let cleanup_effects tycon_env =
             if not (SugarTypeVar.is_resolved stv)
             then begin
                 let gen_unresolved_eff () =
-                  SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None `Rigid
+                  SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true (SugarKind.mk_unresolved_none) `Rigid
                 in
                 let to_unresolved_general sk fr =
                   SugarTypeVar.mk_unresolved "$" ~is_eff:true sk fr
@@ -396,7 +396,7 @@ let cleanup_effects tycon_env =
                 then
                   begin
                     if (name = "$" || name = shared_effect_var_name)
-                       && sk = None && fr = `Rigid (* TODO need sk,fr? *)
+                       && (SugarKind.is_empty sk) && fr = `Rigid (* TODO need sk,fr? *)
                     then let stv' = match allow_shared with
                            | `Allow -> gen_unresolved_eff ()
                            | `Infer -> gen_resolved_flex ()
@@ -454,7 +454,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
            match eff_var with
            | Datatype.Open stv
              when (not (SugarTypeVar.is_resolved stv))
-                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, None), `Rigid)
+                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, (SugarKind.mk_unresolved_none)), `Rigid)     
              ->
                self#with_implicit
            | _ -> self )
@@ -466,7 +466,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
              when List.length param_kinds = List.length ts + 1 ->
                let poss_with_implicit =
                  match ListUtils.last param_kinds with
-                 | PrimaryKind.Row, (_, Restriction.Effect) ->
+                 | PrimaryKind.Row, (_, "Eff") ->
                      self#with_implicit
                  | _ -> self
                in
@@ -482,7 +482,7 @@ let gather_operation_of_type tp
     let module FieldEnv = Utility.StringMap in
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
-      primary = PrimaryKind.Row && restriction = Restriction.Effect
+      primary = PrimaryKind.Row && restriction = "Eff"
     in
     let o =
       object (o : 'self_type)
@@ -656,7 +656,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -707,7 +707,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -891,7 +891,7 @@ class main_traversal simple_tycon_env =
               let module PK = PrimaryKind in
               let process_type_arg i : Kind.t * type_arg -> Datatype.type_arg =
                 function
-                | (PK.Row, (_, Restriction.Effect)), Row r ->
+                | (PK.Row, (_, "Eff")), Row r ->
                     let _o, erow = o#effect_row ~in_alias:(Some tycon) r in
                     Row erow
                 | (PK.Row, _), Row r ->
@@ -925,7 +925,7 @@ class main_traversal simple_tycon_env =
 
               let may_procide_shared_effect =
                 match ListUtils.last_opt params with
-                | Some (PrimaryKind.Row, (_, Restriction.Effect)) ->
+                | Some (PrimaryKind.Row, (_, "Eff")) ->
                     has_effect_sugar ()
                 | _ -> false
               in
@@ -949,7 +949,7 @@ class main_traversal simple_tycon_env =
                     (* Looking for this gives us the operations associcated with
                        the $eff var. The kind and freedom info are ignored for the lookup *)
                     let eff_sugar_var =
-                      SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None
+                      SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true (SugarKind.mk_unresolved_none)
                         `Rigid
                     in
 
@@ -1019,8 +1019,16 @@ class main_traversal simple_tycon_env =
             if not allow_implictly_bound_vars then
               raise (DesugarTypeVariables.free_type_variable dpos);
 
-            let _name, (is_eff, sk), freedom = SugarTypeVar.get_unresolved_exn stv in
-            let mtv = make_anon_point ~is_eff:is_eff (PrimaryKind.Row) sk freedom in
+            let _name, (is_eff, kind), freedom = SugarTypeVar.get_unresolved_exn stv in
+            let (lin, rest) = SugarKind.get_unresolved_sk_exn kind in
+            let sk = 
+              match lin, rest with
+              | None, Some rest -> Some (lin_unl, rest)
+              | Some lin, Some rest -> Some (lin, rest)
+              | Some lin, None -> failwith "shouldn't happen"
+              | None, None -> None
+            in
+            let mtv = make_anon_point ~is_eff:is_eff pk_row sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
         | D.Open srv when not (SugarTypeVar.is_resolved srv) ->
@@ -1232,8 +1240,42 @@ class main_traversal simple_tycon_env =
             SourceCode.WithPos.make ~pos (name, args, dt')
           in
 
+
           let ts' = List.map traverse_body ts in
           ({<tycon_env>}, Aliases ts')
+      | ClassDecl (s, qs) -> 
+        (*let open SourceCode.WithPos in
+        let tycon_env, sk =
+          List.fold_left
+            (fun (subkind_env, sks) { node = t, args, _; _ } ->
+              let params =
+                List.map
+                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                  args
+              in
+              (* initially pretend that no type needs an implict parameter *)
+              (* TODO                                vvvv ??? *)
+              let env' = SEnv.bind t (params, false, None) subkind_env in
+              let tycons' = StringSet.add t tycons in
+              (env', tycons'))
+            (tycon_env, StringSet.empty)
+            ts
+        in*)
+        (o, ClassDecl (s, qs))
+      | ClassFun f as b -> 
+
+        (*let implicits_allowed =
+          DesugarTypeVariables.sig_allows_implicitly_bound_vars (snd (Class.fun' f))
+        in*)
+        
+
+        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+        let o, b = o#super_bindingnode b in
+
+        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+        (o, b)
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype

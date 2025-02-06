@@ -1,6 +1,6 @@
 (** Desugar datatypes converts types from their syntactic representation
    (defined in {!Sugartypes}) to the semantic one defined in {!Types}. It also
-   handles some limited  forms of syntactic sugar within types, and translates
+   handles some limited forms of syntactic sugar within types, and translates
    them appropriately.
  *)
 
@@ -355,11 +355,13 @@ module Desugar = struct
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_alias_env =
+let desugar initial_alias_env initial_subkind_env =
 object (self)
   inherit SugarTraversals.fold_map as super
 
   val alias_env = initial_alias_env
+
+  val subkind_env = initial_subkind_env
 
   method! datatype' node = (self, Desugar.datatype' alias_env node)
 
@@ -402,6 +404,34 @@ object (self)
 
 
   method! bindingnode = function
+    | ClassDecl (name, qs) ->
+
+      Debug.print ("Creating constraint " ^ name);
+      Types.DynamicConstraint.create name;
+
+
+      (*Types.update_dyn_constraint (function
+      | Types.Primitive Primitive.Int -> true
+      | Types.Primitive Primitive.Float -> false
+      | _ -> false
+      );*)      
+      (*(* Desugar all DTs *)
+      let class_methods =
+        (fun qs ->
+          let methods = class_methods in
+          List.map (fun (b, dt') ->
+            (* Desugar the datatype *)
+            (* Check if the datatype has actually been desugared *)
+            let dt' = match Desugar.datatype' alias_env dt' with
+              | (_, Some _) as dt' -> dt'
+              | _ -> raise (internal_error "Datatype not desugared")
+            in (b, dt')
+          ) methods
+        ) qs 
+      in*)
+         
+      ({< subkind_env = subkind_env >}, ClassDecl (name, qs))
+      
     | Aliases ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
@@ -505,6 +535,24 @@ object (self)
        let _, binder = self#binder binder in
        let datatype = Desugar.foreign alias_env datatype in
        self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
+    | ClassFun f ->
+      let binder, datatype = Class.fun' f in
+      let _, binder = self#binder binder in
+      let datatype = Desugar.datatype' alias_env datatype in
+      self, ClassFun (Class.modify ~funs:[(binder, datatype)] f)
+
+    | Instance (class_name, dt, _instances) as b ->
+      Debug.print ("Updating constraint `" ^ class_name ^ "`");
+      let (dt', typ) = Desugar.datatype' alias_env dt in
+      let () =
+        match typ with
+        | Some t -> 
+                Debug.print (Types.string_of_datatype t);
+                Types.DynamicConstraint.update class_name t;
+        | None -> ()
+      in
+
+      super#bindingnode b
     | b -> super#bindingnode b
 
 
@@ -523,55 +571,59 @@ object (self)
       self, (bindings, e)
 
   method aliases = alias_env
+
+  method subkinds = subkind_env
 end
 
-let phrase alias_env p =
-  (desugar alias_env)#phrase p
+let phrase alias_env subkind_env p =
+  (desugar alias_env subkind_env)#phrase p
 
-let binding alias_env ({ node; pos } as b : binding) =
+let binding alias_env subkind_env ({ node; pos } as b : binding) =
   match node with
   | Funs bnds ->
       let bnds =
         List.map
           (fun bnd ->
-            (desugar alias_env)#recursive_function bnd
+            (desugar alias_env subkind_env)#recursive_function bnd
             |> snd )
           bnds
       in
-      (alias_env, WithPos.make ~pos (Funs bnds))
+      (alias_env, subkind_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let o, b = (desugar alias_env)#binding b in
-      (o#aliases, b)
+      let o, b = (desugar alias_env subkind_env)#binding b in
+      (o#aliases, o#subkinds, b)
 
-let toplevel_bindings alias_env bs =
-  let alias_env, bnds =
+let toplevel_bindings alias_env subkind_env bs =
+  let alias_env, subkind_env, bnds =
     List.fold_left
-      (fun (alias_env, bnds) bnd ->
-         let aliases, bnd = binding alias_env bnd in
-           (aliases, bnd::bnds))
-    (alias_env, [])
+      (fun (alias_env, subkind_env, bnds) bnd ->
+         let aliases, subkinds, bnd = binding alias_env subkind_env bnd in
+           (aliases, subkinds, bnd::bnds))
+    (alias_env, subkind_env, [])
       bs
-  in (alias_env, List.rev bnds)
+  in (alias_env, subkind_env, List.rev bnds)
 
 let program typing_env (bindings, p : Sugartypes.program) :
     Sugartypes.program =
   let alias_env = typing_env.tycon_env in
-  let alias_env, bindings =
-    toplevel_bindings alias_env bindings in
+  let subkind_env = typing_env.subkind_env in
+  let alias_env, subkind_env, bindings =
+    toplevel_bindings alias_env subkind_env bindings in
   (* let typing_env = { typing_env with tycon_env = alias_env } in *)
-  (bindings, opt_map ((phrase alias_env) ->- snd) p)
+  (bindings, opt_map ((phrase alias_env subkind_env) ->- snd) p)
 
 let sentence typing_env = function
   | Definitions bs ->
-      let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
+      let _alias_env, _subkind_env, bs' = 
+        toplevel_bindings typing_env.tycon_env typing_env.subkind_env bs in
         Definitions bs'
-  | Expression  p  -> let _o, p = phrase typing_env.tycon_env p in
+  | Expression  p  -> let _o, p = phrase typing_env.tycon_env typing_env.subkind_env p in
       Expression p
   | Directive   d  -> Directive d
 
-let read ~aliases s =
+let read ~subkinds ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
-  let dt = DesugarTypeVariables.standalone_signature dt in
+  let dt = DesugarTypeVariables.standalone_signature subkinds dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in
   ty

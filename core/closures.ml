@@ -409,10 +409,13 @@ struct
   let fun_def def = {def with fn_binder = binder def.fn_binder}
   let binding = function
     | Let (x, body) -> Let (binder x, body)
+    | CInst (x, body) -> CInst (binder x, body)
     | Fun def -> Fun (fun_def def)
     | Rec defs -> Rec (List.map fun_def defs)
-    | Alien { binder = x; object_name; language } ->
-       Alien { binder = binder x; object_name; language }
+    | Alien { alien_binder = x; object_name; language } ->
+       Alien { alien_binder = binder x; object_name; language }
+    | CFun x ->
+      CFun (binder x)
     | Module _ ->
        raise (Errors.internal_error
                 ~filename:"closures.ml"

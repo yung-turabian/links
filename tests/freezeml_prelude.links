@@ -1,3 +1,13 @@
+infixr 5 ++;
+
+sig ++ : ([a], [a]) -> [a]
+op ms ++ ns {
+		switch (ms) {
+				case [] 		-> ns
+				case m::ms  -> m::(ms ++ ns)
+		}
+}
+
 sig head : forall a, e::Row. ([a]) -e-> a
 fun head(x :: _) { x }
 

@@ -21,6 +21,8 @@ struct
     | Fun def -> add fs def
     | Rec defs -> List.iter (add fs) defs
     | Alien _ -> ()
+    | CFun _ -> ()
+    | CInst _ -> ()
     | Module _ ->
         raise (Errors.internal_error
           ~filename:"buildTables.ml"
@@ -236,10 +238,20 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | Alien { binder; _ } :: bs ->
-           let f = Var.var_of_binder binder in
-           let fvs = IntSet.remove f fvs in
-           o#close_cont fvs bs
+        | Alien { alien_binder; _ } :: bs ->
+          let f = Var.var_of_binder alien_binder in
+          let fvs = IntSet.remove f fvs in
+          o#close_cont fvs bs
+        | CFun b :: bs ->
+          let f = Var.var_of_binder b in
+          let fvs = IntSet.remove f fvs in
+          o#close_cont fvs bs
+        | CInst (x, (_op, _tyvars, body))::bs ->
+          let fvs = IntSet.remove (Var.var_of_binder x) fvs in
+          let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
+          (* we record the relevant free variables of the body *)
+          o#close x fvs;
+          o#close_cont (IntSet.union fvs fvs') bs
         | Module _::_ ->
             assert false
 

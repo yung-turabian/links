@@ -1,0 +1,9 @@
+
+typename Comp(a, e::Eff) = () ~e~> a;
+
+sig id : forall a::Base . (a) {}-> a
+fun id (x) {
+		x
+}
+
+id("hello")

@@ -16,6 +16,11 @@ let runtime_type_error error =
      "This should not happen if the type system / checker is correct. " ^
      "Please file a bug report.")
 
+(* Subkind (Class) environment *)
+module SubkindEnv = Env.String
+
+let subkind_env : Types.subkind_environment = DefaultSubkindClasses.subkind_env
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -24,12 +29,12 @@ module AliasEnv = Env.String
 let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
-  AliasEnv.bind "Repeat" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Repeat.datatype))) alias_env
+  AliasEnv.bind "Repeat" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env Linksregex.Repeat.datatype))) alias_env
 
 let alias_env : Types.tycon_environment =
-  AliasEnv.bind "Regex" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
+  AliasEnv.bind "Regex" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env Linksregex.Regex.datatype))) alias_env
 
-let datatype = DesugarDatatypes.read ~aliases:alias_env
+let datatype = DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env
 
 type primitive =
 [ Value.t
@@ -228,17 +233,17 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
 
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
-  "+", int_op (+) PURE;
+  "addInt", int_op (+) PURE;
   "-", int_op (-) PURE;
-  "*", int_op ( * ) PURE;
-  "/", int_op (/) IMPURE;
-  "^", int_op pow PURE;
+  "mulInt", int_op ( * ) PURE;
+  "divInt", int_op (/) IMPURE;
+  "powInt", int_op pow PURE;
   "mod", int_op (mod) IMPURE;
-  "+.", float_op (+.) PURE;
+  "addFloat", float_op (+.) PURE;
   "-.", float_op (-.) PURE;
-  "*.", float_op ( *.) PURE;
-  "/.", float_op (/.) PURE;
-  "^.", float_op ( ** ) PURE;
+  "mulFloat", float_op ( *.) PURE;
+  "divFloat", float_op (/.) PURE;
+  "powFloat", float_op ( ** ) PURE;
   "^^", string_op ( ^ ) PURE;
 
   "max_int",
@@ -262,6 +267,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (* Comparisons *)
+
   "==",
   (p2 (fun v1 v2 -> Value.box_bool (equal v1 v2)),
    datatype "(a,a) -> Bool",
@@ -330,6 +336,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ~box:Value.box_float
                                  ~into:(Types.Primitive Primitive.Float)
                                  IMPURE;
+  "boolToString", conversion_op ~from:(Types.Primitive Primitive.Bool)
+                                 ~unbox:Value.unbox_bool
+                                  ~conv:string_of_bool
+                                  ~box:Value.box_string
+                                  ~into:Types.string_type
+                                  PURE;
 
   "stringToXml",
   ((p1 string_to_xml),
@@ -718,7 +730,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "print",
   (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
-   (* datatype "(String) ~> ()", *)
    datatype "(String) ~> ()",
   IMPURE);
 
@@ -731,11 +742,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Bool) -> Bool",
   PURE);
 
-  "negate",
+  "negInt",
   (p1 (Value.unbox_int ->- (~-) ->- Value.box_int), datatype "(Int) -> Int",
   PURE);
 
-  "negatef",
+  "negFloat",
   (p1 (fun f -> Value.box_float (-. (Value.unbox_float f))), datatype "(Float) -> Float",
   PURE);
 
@@ -1527,6 +1538,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
+    
+
+    (* TODO this could be bootstrapped instead *)
 
     (* LINKS GAME LIBRARY *)
 
@@ -1792,6 +1806,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
+                  subkind_env = subkind_env;
                   Types.effect_row = Types.closed_wild_row;
                   Types.cont_lin = -1;
                   Types.desugared = false }

@@ -3,6 +3,17 @@
 
 open Utility
 
+let show_subkindclasses
+  = Settings.(flag "show_subkindclasses"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
+
+module Name = struct
+  type t = string
+    [@@deriving show]
+end
+
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
@@ -48,69 +59,103 @@ let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
 module Restriction = struct
-  type t =
-    | Any
-    | Base
-    | Mono
-    | Session
-    | Effect
-    [@@deriving eq,show]
+  type t = string
+  [@@deriving eq,show]
 
-  let is_any = function
-    | Any -> true
-    | _   -> false
+  let restrictions : (t, t list) Hashtbl.t = Hashtbl.create 20
 
-  let is_base = function
-    | Base -> true
-    | _    -> false
+  (* Default restrictions *)
+  let () =
+    (* Any is the most general restriction *)
+    Hashtbl.add restrictions "Any" [];
+    (* Mono is a child of Any *)
+    Hashtbl.add restrictions "Mono" ["Any"];
+    (* Base and Session are children of Mono *)
+    Hashtbl.add restrictions "Base" ["Mono"; "Any"];
+    Hashtbl.add restrictions "Session" ["Mono"; "Any"];
+    (* Effect is a direct child of Any *)
+    Hashtbl.add restrictions "Eff" ["Any"]
 
-  let is_mono = function
-    | Mono -> true
-    | _    -> false
+  let exists name = Hashtbl.mem restrictions name
 
-  let is_session = function
-    | Session -> true
-    | _       -> false
+  let ancestors r =
+    let rec collect acc current =
+      let direct_parents = try Hashtbl.find restrictions current with Not_found -> [] in
+      List.fold_left (fun acc parent ->
+        if List.mem parent acc then acc
+        else collect (parent::acc) parent
+      ) acc direct_parents
+    in
+    if exists r then collect [] r else []
 
-  let is_effect = function
-    | Effect -> true
-    | _      -> false
+    let min r1 r2 =
+      if r1 = r2 then Some r1 (* All restrictions will min to themselves *)
+      else 
+        let is_r1_ancestor_of_r2 = List.mem r1 (ancestors r2) in
+        let is_r2_ancestor_of_r1 = List.mem r2 (ancestors r1) in
+        match is_r1_ancestor_of_r2, is_r2_ancestor_of_r1 with
+        | true, false -> Some r2 
+        | false, true -> Some r1
+        | _ -> None
 
-  let to_string = function
-    | Any     -> "Any"
-    | Base    -> "Base"
-    | Mono    -> "Mono"
-    | Session -> "Session"
-    | Effect  -> "Eff"
+  let add ?(parents=["Any"]) name =
+    if exists name then
+      Debug.if_set (show_subkindclasses)
+        (fun () -> ("Restriction " ^ name ^ " already exists"))
+    else if List.for_all exists parents then
+      Hashtbl.add restrictions name parents
+    else
+      Debug.if_set (show_subkindclasses)
+        (fun () -> ("Some parent restrictions not found: "));
 
-  let min l r =
-    match l, r with
-    | Any, Any         -> Some Any
-    | Mono, Mono       -> Some Mono
-    | Session, Session -> Some Session
-    | Effect, Effect   -> Some Effect
-    | Base, Base       -> Some Base
-    | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
-    | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
-    | Session, Mono | Mono, Session -> Some Session (* Super dubious, but we don't have another way*)
-    | _ -> None
+      List.iter (fun r -> Debug.if_set (show_subkindclasses)
+        (fun () -> (r))) parents
+
+  let to_string r = r
+
+   let to_dot () =
+    let buf = Buffer.create 256 in
+    Buffer.add_string buf "direstrictions Restrictions {\n";
+    Buffer.add_string buf "  rankdir=BT;\n";  (* Bottom-to-top ranking *)
+    Hashtbl.iter (fun child parents ->
+      List.iter (fun parent ->
+        Buffer.add_string buf (Printf.sprintf "  \"%s\" <: \"%s\";\n" child parent))
+        parents
+    ) restrictions;
+    Buffer.add_string buf "}\n";
+    Buffer.contents buf
+
+    (** These can be deleted. *)
+    let () =
+      assert (min "Any" "Base" = Some "Base");
+      assert (min "Base" "Any" = Some "Base");
+      assert (min "Base" "Mono" = Some "Base");
+      assert (min "Mono" "Base" = Some "Base");
+
+      assert (min "Any" "Session" = Some "Session");
+      assert (min "Session" "Any" = Some "Session");
+
 end
 
-(* Convenient aliases for constructing values *)
-let res_any     = Restriction.Any
-let res_base    = Restriction.Base
-let res_mono    = Restriction.Mono
-let res_session = Restriction.Session
-let res_effect  = Restriction.Effect
+(* Convenient aliases for constructing default values *)
+let res_any     = "Any"
+let res_base    = "Base"
+let res_mono    = "Mono"
+let res_session = "Session"
+let res_effect  = "Eff"
 
 module Subkind = struct
   type t = Linearity.t * Restriction.t
     [@@deriving eq,show]
-
+  
   let to_string (lin, res) =
     Printf.sprintf "(%s,%s)"
       (Linearity.to_string   lin)
       (Restriction.to_string res)
+
+  let to_string_opt = function
+  | Some (lin, res) -> to_string (lin, res)
+  | _ -> ""
 
   let restriction (_, res) = res
   let linearity (lin, _) = lin
@@ -118,6 +163,19 @@ module Subkind = struct
   let as_session (lin, _) = (lin, res_session)
 end
 
+let default_subkind : Subkind.t = (lin_unl, res_any)
+let any_subkind : Subkind.t = (lin_any, res_any)
+
+(* NOTICE: `lin_any` here means this eff_row_var can be unified with
+    linear or unlimited row types *)
+
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
+let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
+
+let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
+
+(* NOTE: should remain static *)
 module PrimaryKind = struct
   type t =
     | Type
@@ -136,6 +194,8 @@ let pk_type     = PrimaryKind.Type
 let pk_row      = PrimaryKind.Row
 let pk_presence = PrimaryKind.Presence
 
+let default_kind : PrimaryKind.t = PrimaryKind.Type
+
 module Kind = struct
   type t = PrimaryKind.t * Subkind.t
     [@@deriving eq,show]
@@ -149,6 +209,20 @@ module Kind = struct
     (pk, Subkind.as_session sk)
 
   let primary_kind (pk, _) = pk
+
+  let to_string (pk, sk) = 
+    let pk = 
+      match pk with
+      | None -> ""
+      | Some k -> PrimaryKind.to_string k
+    in
+    let sk = 
+      match sk with
+      | None -> ""
+      | Some k -> Printf.sprintf "%s%s" "::" (Subkind.to_string k)
+    in
+
+    Printf.sprintf "%s%s" pk sk
 end
 
 module Quantifier = struct
@@ -274,11 +348,6 @@ let loc_unknown = Location.Unknown
 
 module Freedom = struct
   type t = [`Flexible | `Rigid]
-    [@@deriving show]
-end
-
-module Name = struct
-  type t = string
     [@@deriving show]
 end
 

@@ -255,6 +255,7 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 | `Alien
+| `SubkindClassFunction of string
 ]
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
@@ -308,6 +309,8 @@ val intmap_of_record : t -> t Utility.intmap option
 val string_of_value : t -> string
 val string_of_xml : ?close_tags:bool -> xml -> string
 val string_of_calendar_utc : Utility.CalendarShow.t -> string
+
+val typ : t -> Types.datatype
 
 val p_value: Format.formatter -> t -> unit
 

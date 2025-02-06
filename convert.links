@@ -1,0 +1,19 @@
+infixl 6 `convert`;
+
+class Converter : (a, b) {
+    sig `convert` : (a) -> b;
+}
+
+instance Converter : (Int, String) {
+    `convert` : intToString;
+}
+
+instance Converter : (Bool, Int) {
+    `convert` :  fun(b) {if (b) 1 else 0};
+}
+
+instance Converter : ([Int], Int) {
+    `convert` : max_list;
+}
+
+`convert` [4, 5, 3, 9]

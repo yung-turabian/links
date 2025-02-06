@@ -28,6 +28,7 @@ exception RichSyntaxError of synerrspec
 exception DesugaringError of
   { pos: Position.t; stage: sugar_error_stage; message: string }
 exception UnboundTyCon of (Position.t * string)
+exception UnboundSubkind of (Position.t * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
@@ -69,3 +70,5 @@ val object_file_write_error : string -> string -> exn
 val type_application_kind_mismatch : Position.t -> string -> int -> string -> string -> exn
 val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn
 val unbound_tycon : Position.t -> string -> exn
+val unbound_subkind : Position.t -> string -> exn
+val unbound_subkind_instance : Position.t -> string -> string -> exn

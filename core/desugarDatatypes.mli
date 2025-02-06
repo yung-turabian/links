@@ -1,4 +1,4 @@
-val read : aliases:Types.tycon_environment -> string -> Types.datatype
+val read : subkinds:Types.subkind_environment -> aliases:Types.tycon_environment -> string -> Types.datatype
 
 val sentence :
   Types.typing_environment ->

@@ -1,3 +1,145 @@
+# open import Num;
+
+infixr 5 ++;
+
+sig ++ : ([a], [a]) -> [a]
+op ms ++ ns {
+		switch (ms) {
+				case [] -> ns
+				case m::ms -> m::ms ++ ns
+		} 
+}
+
+infixr 8 ^;
+infixl 6 +;
+infixl 6 `sub`;
+infixl 7 *;
+infixl 7 /;
+infixl 6 `negate`;
+
+class Num : (a::Type(Unl, Any)) {
+		sig + : (a, a) -> a;
+		sig * : (a, a) -> a;
+		sig `sub` : (a, a) -> a;
+		sig `negate` : (a) -> a;
+		sig ^ : (a, a) -> a;
+		sig `abs` : (a) -> a;
+        sig `fromInteger` : (Int) -> a;
+}
+
+
+instance Num : Int {
+		+ : addInt;
+		* : mulInt;
+		`sub` : (-); # Hacky, should be proper
+		`negate` : negInt;
+		^ : powInt;
+		`abs`: fun(i) { if (i < 0) `negate` i else i };
+        `fromInteger` : fun(i) { i };
+}
+
+instance Num : Float {
+		+ : addFloat;
+		* : mulFloat;
+		`sub` : (-.);
+		`negate` : negFloat;
+		^ : powFloat;
+		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
+        `fromInteger` : intToFloat;
+}
+
+class Fractional : (a::Type(Unl, Num)) {
+    sig / : (a, a) -> a;
+}
+
+instance Fractional : Int {
+    / : divInt;
+}
+
+instance Fractional : Float {
+    / : divFloat;
+}
+
+class Show : (a::Type) {
+		sig `stringOf` : (a) -> String;
+}
+
+instance Show : Bool {
+		`stringOf` : fun (x) { if (x == true) "True" else "False" };
+}
+
+instance Show : Int {
+		`stringOf` : intToString;
+}
+
+instance Show : Float {
+		`stringOf` : floatToString;
+}
+
+instance Show : Char {
+		`stringOf` : fun (c) { implode(c :: []) };
+}
+
+sig eqInt : (Int, Int) -> Bool 
+fun eqInt(x, y) {
+		if (x == y) true
+		else false
+}
+
+sig eqFloat : (Float, Float) -> Bool 
+fun eqFloat(x, y) {
+		if (x == y) true
+		else false
+}
+
+sig ltInt : (Int, Int) -> Bool 
+fun ltInt(x, y) {
+		if (x < y) true
+		else false
+}
+
+class Eq : (a::Type) {
+		sig `eq` : (a, a) -> Bool;
+}
+
+instance Eq : Int {
+		`eq` : eqInt; 
+}
+
+instance Eq : Float {
+		`eq` : eqFloat; 
+}
+
+class Ord : (a::Eq) {
+		sig `lteq` : (a, a) -> Bool;
+}
+
+instance Ord : Int {
+		`lteq` : fun(x, y) { if (x `eq` y || ltInt(x,y)) true else false};
+}
+
+sig compare_adjacent : ([a::Ord], (a::Ord, a::Ord) ~b~> Bool) ~b~> Bool
+fun compare_adjacent(l, cmp) {
+    switch(l) {
+        case [] -> true
+				case [_] -> true
+        case x::y::rest -> cmp(x, y) && compare_adjacent(y::rest, cmp)
+    }
+}
+
+fun all_equal(l) { compare_adjacent(l, (`eq`)) }
+fun is_non_decreasing(l) { compare_adjacent(l, (`lteq`)) }
+
+sig square : (%a) -> %a
+fun square(x) {
+		x * x
+}
+
+sig squares : (a::Num, a, a) -> (a, a, a)
+fun squares (x, y, z) {
+		(square(x), square(y), square(z))
+}
+
 fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
@@ -241,6 +383,20 @@ fun reverse(l) {
   aux(l, [])
 }
 
+sig palindrome : ([%a::Ord]) ~> Bool 
+fun palindrome(l) {
+		var rev = reverse(l);
+
+		sig aux : ([%a], [%a]) ~> Bool
+		fun aux(l, rev) {
+				switch((l, rev)) {
+						case ([], []) -> true
+						case (x::xs, y::ys) -> 
+								x `eq` y && aux(xs, ys)
+				}
+		}
+		aux(l, rev)
+}
 
 fun concat(list) {
   switch (list) {
@@ -306,11 +462,6 @@ fun dropWhile(pred, list) {
 #   else if (i < 0) -1
 #   else 0
 # }
-
-sig abs : (Int) -> Int
-fun abs(i) {
-  if (i < 0) -i else i
-}
 
 sig init : ([a]) ~> [a]
 fun init(list) {
@@ -442,21 +593,21 @@ unsafe sig sumF : ([Float]) -> Float
 fun sumF(ns) {
   switch (ns) {
     case [] -> 0.0
-    case n::ns -> n +. sumF(ns)
+    case n::ns -> n + sumF(ns)
   }
 }
 
 fun avg(l) {
   switch (l) {
     case [] -> 0.0
-    case n::ns -> intToFloat(sum(l)) /. intToFloat(length(l))
+    case n::ns -> intToFloat(sum(l)) / intToFloat(length(l))
   }
 }
 
 fun avgF(l) {
   switch (l) {
     case [] -> 0.0
-    case n::ns -> sumF(l) /. intToFloat(length(l))
+    case n::ns -> sumF(l) / intToFloat(length(l))
   }
 }
 
@@ -1337,7 +1488,7 @@ typename Pid(a::Type) = Process({hear: a});
 # The effect row variable `e` can have kind `Row(Any)` because no linear
 # resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+#sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1347,7 +1498,7 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+#sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   xlin;
   var ap = new();
@@ -1358,7 +1509,7 @@ fun linFork(f) {
 }
 
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
+#sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   xlin;
   var x = accept(ap);
@@ -1376,7 +1527,7 @@ fun reproduce(ap, f) {
 # run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
+#sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   xlin;
   var ap = new();
@@ -1422,7 +1573,7 @@ fun makeEndBang() {
 # with split ends we synchronise on the termination of each spawned
 # child process
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
+#sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
   xlin;
   var ap = new();
@@ -1435,7 +1586,7 @@ fun forkSync(f) {
 }
 
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
+#sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   xlin;
   var ap = new();
@@ -1448,7 +1599,7 @@ fun linForkSync(f) {
 }
 
 #sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
-sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
+#sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
   xlin;
   link(s, c);

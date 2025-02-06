@@ -49,12 +49,12 @@ object(self)
            in
            o#add_binding (with_dummy_pos alien))
       (Alien.declarations alien)
-    | {node=Module ({ members; _ } as module') ; _} ->
+    | {node=Module ({ module_members; _ } as module') ; _} ->
         let flattened_bindings =
           List.concat (
-            List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) members
+            List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) module_members
           ) in
-        self#add_binding (with_dummy_pos (Module { module' with members = flattened_bindings }))
+        self#add_binding (with_dummy_pos (Module { module' with module_members = flattened_bindings }))
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function

@@ -1,0 +1,6 @@
+sig id : (a::Base) -> a
+fun id (x) {
+		x
+}
+
+id("2")
