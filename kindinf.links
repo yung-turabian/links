@@ -1,7 +1,5 @@
-typename Id(a, e) = (a) ~e~> a;
 
-
-typename Idtwo(a, e) = (a) -e-> a;
-fun id(x) { x }
-
-id(4)
+sig add : (a) -> a
+fun add(x) {
+		x +. 2.3
+}

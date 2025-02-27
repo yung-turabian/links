@@ -3,8 +3,8 @@ typename Id(a, e) = (a) ~e~> a;
 stdout : () : ()
 
 Infer Presence
-typename T(p) = (foo{p});
-stdout : () : ()
+typename T(p) = (foo{p});(foo=4200) : T({:Int})
+stdout : (foo = 4200) : T ({:Int})
 
 Infer kinds
 typename Id(a, e) = (a) ~e~> a; sig id : Id(a, e) fun id(x) { x } id(4)
