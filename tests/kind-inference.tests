@@ -1,0 +1,11 @@
+Infer Effect Row
+typename Id(a, e) = (a) ~e~> a;
+stdout : () : ()
+
+Infer Presence
+typename T(p) = (foo{p});
+stdout : () : ()
+
+Infer kinds
+typename Id(a, e) = (a) ~e~> a; sig id : Id(a, e) fun id(x) { x } id(4)
+stdout : 4 : Int

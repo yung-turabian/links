@@ -1,12 +1,13 @@
 open Utility
 open CommonTypes
 open Sugartypes
+open KindUtils
 
 (**
 
 This pass handles effect variables and the "effect sugar" (if enabled).
 
-This pass assumes that all type variables have been resolved expect
+This pass assumes that all type variables have been resolved except
 anonymous row variables. All non-anonymous effect variables must have been
 resolved such that different variables use Var Unionfind points whose integer
 ids are different.
@@ -270,10 +271,10 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
      forms to the canonical one.
   - Remap anonymous effect variables to the correct version.
     - If effect sugar is disabled, all anonymous effect variables become "$".
-   - If we've an unnamed effect in a non-tail position (i.e. not the far
+    - If we've an unnamed effect in a non-tail position (i.e. not the far
       right of an arrow/typename chain) then remap to "$". For instance,
       `(a) -> (b) -> c` becomes `(a) -$-> (b) -$-> c`.
-   - If we're an anonymous variable in a row, remap to "$". (For instance,
+    - If we're an anonymous variable in a row, remap to "$". (For instance,
       ` -_->` becomes `-$eff->`. *)
 let cleanup_effects tycon_env =
   let has_effect_sugar = has_effect_sugar () in
@@ -312,6 +313,7 @@ let cleanup_effects tycon_env =
        in
        let res_t =
          match t with
+         (* issue 1157 uses the function *)
          | Function (a, e, r) ->
              let a, e, r = do_fun a e r in
              Function (a, e, r)
@@ -696,6 +698,11 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
             self#quantified (fun o -> o#datatype t) [ sq ]
         | Forall (qs, t) -> self#quantified (fun o -> o#datatype t) qs
         | _ -> super#datatype dt
+
+
+        (*let () =
+        Debug.if_set (show_kind_inference)
+          (fun () -> "Infering kind of effect row arg in type aplication: ") in*)
 
       method! row_var =
         let open Datatype in
@@ -1129,9 +1136,14 @@ class main_traversal simple_tycon_env =
               (fun (implicits, dep_graph) { node = t, _, b; pos ;_ } ->
                 match b with
                   | Typename (d,_) ->
+                  
                     let d = cleanup_effects tycon_env d in
                     let eff = gather_mutual_info tycon_env d in
                     let has_imp = eff#has_implicit in
+                    let () =
+                    (if not has_imp then Debug.if_set (show_kind_inference)
+                      (fun () -> "No implicit effect variable declarations for: " ^ show_aliasbody b ))
+                    in
                     let implicits = StringMap.add t has_imp implicits in
                     let used_mutuals = StringSet.inter eff#used_types tycons in
                     let dep_graph =

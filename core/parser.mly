@@ -145,7 +145,7 @@ let kind_of p =
   | "Type"     -> (Some pk_type, None)
   | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
   | "Presence" -> (Some pk_presence, None)
-  (* subkind of type abbreviations *)
+  (* subkind abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
   | "Session"  -> (Some pk_type, Some (lin_any, res_session))
@@ -1186,7 +1186,7 @@ kinded_type_var:
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
-(* in the face of kind inferencing, this is a way to sidestep ambiguity *)
+(* deliberate kind declaration *)
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
 | braced_fieldspec                                             { Datatype.Presence $1 }
