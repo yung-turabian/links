@@ -65,6 +65,11 @@ let unpack_var_id = function
   | Types.Var (id, subkind, _) -> id, subkind
   | _ -> raise found_non_var_meta_var
 
+let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
+  | Datatype.UnresolvedKind _ -> PrimaryKind.Type
+  | Datatype.Type _ -> PrimaryKind.Type
+  | Datatype.Row _ -> PrimaryKind.Row
+  | Datatype.Presence _ -> PrimaryKind.Presence
 
 
 module Desugar = struct
@@ -122,11 +127,6 @@ module Desugar = struct
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
               let match_kinds i (q, t) =
-                let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
-                  | Type _ -> PrimaryKind.Type
-                  | Row _ -> PrimaryKind.Row
-                  | Presence _ -> PrimaryKind.Presence
-                in
                 let q_kind, _ = proj q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
@@ -218,11 +218,6 @@ module Desugar = struct
         | EffectApplication (name, ts) ->
             let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
               let match_kinds i (q, t) =
-                let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
-                  | Type _ -> PrimaryKind.Type
-                  | Row _ -> PrimaryKind.Row
-                  | Presence _ -> PrimaryKind.Presence
-                in
                 let q_kind, _ = proj q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
@@ -302,6 +297,7 @@ module Desugar = struct
     let open Datatype in
     let open PrimaryKind in
     match ta with
+    | UnresolvedKind k -> Type, row alias_env k node
     | Type t     -> Type, datatype alias_env t
     | Row r      -> Row, row alias_env r node
     | Presence f -> Presence, fieldspec alias_env f node

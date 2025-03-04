@@ -258,6 +258,7 @@ rule lex ctxt nl = parse
   | ".."                                { DOTDOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
+  | ":>"                                { COLONRARROW }
   | '!'                                 { BANG }
   | '?'                                 { QUESTION }
   | '$'                                 { DOLLAR }

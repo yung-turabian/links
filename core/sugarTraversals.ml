@@ -718,6 +718,7 @@ class map =
 
     method type_arg : Datatype.type_arg -> Datatype.type_arg =
       let open Datatype in function
+      | UnresolvedKind _x -> let _x = o#row _x in UnresolvedKind _x
       | Type _x -> let _x = o#datatype _x in Type _x
       | Row _x -> let _x = o#row _x in Row _x
       | Presence _x -> let _x = o#fieldspec _x in Presence _x
@@ -1508,6 +1509,7 @@ class fold =
 
     method type_arg : Datatype.type_arg -> 'self_type =
       let open Datatype in function
+      | UnresolvedKind _x -> let o = o#row _x in o
       | Type _x -> let o = o#datatype _x in o
       | Row _x -> let o = o#row _x in o
       | Presence _x -> let o = o#fieldspec _x in o
@@ -2440,6 +2442,7 @@ class fold_map =
 
     method type_arg : Datatype.type_arg -> ('self_type * Datatype.type_arg) =
       let open Datatype in function
+      | UnresolvedKind _x -> let (o, _x) = o#row _x in (o, UnresolvedKind _x)
       | Type _x -> let (o, _x) = o#datatype _x in (o, Type _x)
       | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
       | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)

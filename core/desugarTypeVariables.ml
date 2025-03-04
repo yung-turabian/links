@@ -42,12 +42,6 @@ type tyvar_map_entry =
 *)
 type tyvar_map = tyvar_map_entry StringMap.t
 
-let infer_kinds
-  = Settings.(flag "infer_kinds"
-              |> convert parse_bool
-              |> sync)
-
-
 (* Errors *)
 
 let internal_error message =
@@ -101,12 +95,6 @@ let is_anonymous_name name =
 let is_anonymous stv =
   SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
 
-
-(** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
-let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
-      (name, (Some pk_type, subkind), freedom)
-  | v -> v
 
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Kind.t  * Freedom.t) option =
   let extract_data  =
@@ -358,7 +346,7 @@ object (o : 'self)
         SugarQuantifier.get_unresolved_exn sq in
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let (_, (pk, sk), freedom) = ensure_kinded v in
+      let (_, (pk, sk), freedom) = v in
       let freedom = if rigidify then `Rigid else freedom in
       (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in

@@ -51,7 +51,7 @@ fun sortBy (f, l) {
   }
 }
 
-unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
+unsafe sig sortByBase : ((a) -b-> (| _:>Base), [a]) -b-> [a]
 fun sortByBase(f, l) {
   switch (l) {
     case [] -> []
@@ -567,7 +567,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+sig asList : (TableHandle((|a:>Base),(|_:>Base),(|_:>Base))) {}-> [(|a:>Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }

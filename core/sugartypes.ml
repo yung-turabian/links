@@ -92,8 +92,8 @@ type t =
   | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
                                   (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
-  | TResolvedRow      of Types.meta_type_var
-  | TResolvedPresence of Types.meta_type_var
+  | TResolvedRow      of Types.meta_row_var
+  | TResolvedPresence of Types.meta_presence_var
   [@@deriving show]
 
 let is_resolved = function
@@ -103,7 +103,7 @@ let is_resolved = function
 let mk_unresolved name ?(is_eff=false) subkind_opt freedom_opt =
   TUnresolved (name, (is_eff, subkind_opt), freedom_opt)
 
-let mk_resolved_tye point : t =
+let mk_resolved_type point : t =
   TResolvedType point
 
 let mk_resolved_row point : t =
@@ -227,10 +227,11 @@ module Datatype = struct
     | Absent
     | Var of SugarTypeVar.t
   and type_arg =
+    | UnresolvedKind of with_pos
     | Type of with_pos
     | Row of row
     | Presence of fieldspec
-      [@@deriving show]
+    [@@deriving show]
 end
 
 (* Store the denotation along with the notation once it's computed *)

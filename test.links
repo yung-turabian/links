@@ -1,0 +1,11 @@
+typename Id(a:>Eff) = () -a-> ();
+# Both work!
+typename Ef(a) = () ~a~> ();
+
+
+sig p : Ef(a)
+fun p() {
+		print("Hello")	
+}
+
+p()
