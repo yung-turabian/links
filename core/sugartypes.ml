@@ -92,8 +92,8 @@ type t =
   | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
                                   (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
-  | TResolvedRow      of Types.meta_type_var
-  | TResolvedPresence of Types.meta_type_var
+  | TResolvedRow      of Types.meta_row_var
+  | TResolvedPresence of Types.meta_presence_var
   [@@deriving show]
 
 let is_resolved = function

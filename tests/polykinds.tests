@@ -1,0 +1,14 @@
+Base types [1]
+open import Polykindfun; iden(2)
+stdout : 2 : Int
+args : --path=tests
+
+Base types [2]
+open import Polykindfun; iden(2.5)
+stdout : 2.5 : Float
+args : --path=tests
+
+Constructor
+open import Polykindfun; iden([])
+stdout : [] : [_::Any]
+args : --path=tests

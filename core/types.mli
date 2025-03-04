@@ -268,7 +268,7 @@ val type_arg_of_quantifier : Quantifier.t -> type_arg
 val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
-val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
+(* val primary_kind_of_type_arg : type_arg -> PrimaryKind.t *)
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
@@ -448,6 +448,8 @@ val make_thunk_type : row -> datatype -> datatype
 val pp : Format.formatter -> t -> unit
 val pp_datatype : Format.formatter -> t -> unit
 val pp_meta_type_var : Format.formatter -> meta_type_var -> unit
+val pp_meta_row_var : Format.formatter -> meta_row_var -> unit
+val pp_meta_presence_var : Format.formatter -> meta_presence_var -> unit
 val pp_row : Format.formatter -> row -> unit
 val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit

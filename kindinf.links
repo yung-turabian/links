@@ -1,5 +1,4 @@
+typename Id(a, e) = (a) ~e~> a;
 
-sig add : (a) -> a
-fun add(x) {
-		x +. 2.3
-}
+sig id : Id(a, e)
+fun id(x) { x }

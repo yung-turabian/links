@@ -1,9 +1,13 @@
-Infer Effect Row
+Infer Type Variable
+typename Id(a) = a;
+stdout : () : ()
+
+Infer Effect Row Variable
 typename Id(a, e) = (a) ~e~> a;
 stdout : () : ()
 
-Infer Presence
-typename T(p) = (foo{p});(foo=4200) : T({:Int})
+Infer Presence Variable
+typename T(p) = (foo{p}); (foo=4200) : T({:Int})
 stdout : (foo = 4200) : T ({:Int})
 
 Infer kinds

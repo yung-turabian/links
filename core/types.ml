@@ -538,7 +538,7 @@ let check_rec : int -> var_set -> 'a -> (var_set -> 'a) -> 'a =
     else
       k (IntSet.add var rec_vars)
 
-let primary_kind_of_type_arg : type_arg -> PrimaryKind.t = fst
+(* let primary_kind_of_type_arg : type_arg -> PrimaryKind.t = fst *)
 
 (** A constraint provides a way of ensuring a type (or row) satisfies the
    requirements of some subkind. *)
@@ -4808,6 +4808,18 @@ let pp_datatype = pp
 let pp_field_spec = pp
 
 let pp_meta_type_var : Format.formatter -> meta_type_var -> unit = fun fmt p ->
+  if Settings.get print_types_pretty then
+    Format.pp_print_string fmt (string_of_datatype (Meta p))
+  else
+    pp_typ fmt (DecycleTypes.row (Meta p))
+
+let pp_meta_row_var : Format.formatter -> meta_row_var -> unit = fun fmt p ->
+  if Settings.get print_types_pretty then
+    Format.pp_print_string fmt (string_of_datatype (Meta p))
+  else
+    pp_typ fmt (DecycleTypes.row (Meta p))
+
+let pp_meta_presence_var : Format.formatter -> meta_presence_var -> unit = fun fmt p ->
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype (Meta p))
   else

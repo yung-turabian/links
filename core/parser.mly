@@ -1066,7 +1066,7 @@ datatype:
 | mu_datatype | straight_arrow | squiggly_arrow | fat_arrow    { with_pos $loc $1 }
 
 arrow_prefix:
-| LBRACE erow RBRACE                                           { $2            }
+| LBRACE erow RBRACE                                           { $2       }
 
 straight_arrow_prefix:
 | hear_arrow_prefix | arrow_prefix                             { $1       }
@@ -1186,11 +1186,11 @@ kinded_type_var:
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
-(* deliberate kind declaration *)
+/* Kind signatures */
 type_arg:
-| datatype                                                     { Datatype.Type $1     }
-| braced_fieldspec                                             { Datatype.Presence $1 }
-| LBRACE erow RBRACE                                           { Datatype.Row $2      }
+| datatype                                                     { Datatype.Type        $1 }
+| braced_fieldspec                                             { Datatype.Presence    $1 }
+| LBRACE erow RBRACE                                           { Datatype.Row         $2 }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }

@@ -1,0 +1,5 @@
+# Test shows that Links functions handle polymorphic kinds
+# I.e. arguments can take of kind * as well as * -> *, and so on.
+fun iden(ty) { 
+		ty
+}
