@@ -376,7 +376,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME
+%token TYPENAME EFFECTNAME CONSTRAINT
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -480,6 +480,7 @@ nofun_declaration:
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
+| constraintdecl SEMICOLON                                     { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -542,6 +543,24 @@ typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
+
+/* 
+  Working on. Should denote what Kind it dervies from and/or subkinds 
+
+  Also need a new alias function to add to environment.
+
+  I imagine it would look something like this:
+
+  constraint Numeric = Type :> Base :> Numeric;
+  
+  WORK ON THIS
+  sig + : (Int, Int) -> Int
+  fun +(x, y) {
+    x + y
+  }
+*/
+constraintdecl:
+| CONSTRAINT CONSTRUCTOR                                        { alias $loc $2 (Constraint ($2))}
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
@@ -1015,6 +1034,7 @@ binding:
 | signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | typedecl SEMICOLON | links_module
+| constraintdecl SEMICOLON
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:

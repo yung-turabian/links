@@ -87,6 +87,7 @@ let keywords = [
  "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT;
+ "constraint", CONSTRAINT;
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete_left", DELETE_LEFT;

@@ -564,6 +564,7 @@ and alias = aliasnode WithPos.t
 and aliasbody =
   | Typename of datatype'
   | Effectname of row'
+  | Constraint of string
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
