@@ -313,7 +313,7 @@ let cleanup_effects tycon_env =
        in
        let res_t =
          match t with
-         (* issue 1157 uses the function *)
+         (* tmpNOTE issue 1157 uses the function *)
          | Function (a, e, r) ->
              let a, e, r = do_fun a e r in
              Function (a, e, r)

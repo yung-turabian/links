@@ -227,10 +227,11 @@ module Datatype = struct
     | Absent
     | Var of SugarTypeVar.t
   and type_arg =
+    | UnresolvedKind of with_pos
     | Type of with_pos
     | Row of row
     | Presence of fieldspec
-      [@@deriving show]
+    [@@deriving show]
 end
 
 (* Store the denotation along with the notation once it's computed *)

@@ -1,6 +1,4 @@
-open CommonTypes
 open Utility
-open Types
 
 let show_kind_inference
 = Settings.(flag "show_kind_inference"

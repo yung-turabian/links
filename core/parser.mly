@@ -145,11 +145,6 @@ let kind_of p =
   | "Type"     -> (Some pk_type, None)
   | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
   | "Presence" -> (Some pk_presence, None)
-  (* subkind abbreviations *)
-  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
-  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -160,6 +155,16 @@ let subkind_of p =
   | "Base"    -> Some (lin_unl, res_base)
   | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (default_effect_lin, res_effect)
+  | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
+
+let kind_and_subkind_of p =
+  function
+  (* subkind abbreviations *)
+  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
+  | "Lin"     ->  (Some pk_type, Some (lin_unl, res_any)) (* for linear effect vars *)
+  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
@@ -348,7 +353,7 @@ let any = any_pat dp
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONRARROW
 %token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
@@ -537,37 +542,6 @@ signatures:
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
-
-typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
-
-(* Lists of quantifiers in square brackets denote type abstractions *)
-type_abstracion_vars:
-| LBRACKET varlist RBRACKET                                    { $2 }
-
-typeargs_opt:
-| /* empty */                                                  { [] }
-| LPAREN varlist RPAREN                                        { $2 }
-
-kind:
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
-                                                               { full_kind_of $loc $2 $4 $6 }
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
-                                                               { linrow_kind_of $loc $2 $4 }
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
-
-subkind:
-| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
-
-typearg:
-| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
-| VARIABLE kind                                                { attach_kind ($1, $2)                            }
-
-varlist:
-| separated_nonempty_list(COMMA, typearg)                      { $1 }
 
 perhaps_location:
 | SERVER                                                       { loc_server  }
@@ -1057,6 +1031,43 @@ maybe_labeled_exps:
 | separated_list(COMMA, labeled_exp)                           { $1 }
 
 /*
+  Type alias related
+*/
+typedecl:
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { alias $loc $2 $3 (Typename   ( $5     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE    { alias $loc $2 $3 (Effectname ( $6     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app            { alias $loc $2 $3 (Effectname (([], $5), None)) }
+
+(* Lists of quantifiers in square brackets denote type abstractions *)
+type_abstracion_vars:
+| LBRACKET type_var_list RBRACKET                              { $2 }
+
+typeargs_opt:
+| /* empty */                                                  { [] }
+| LPAREN type_var_list RPAREN                                  { $2 }
+
+/* TODO :> notation for subkind 
+  Currently not the best implementation, but it makes it somewhat easier to read. Easy distinction.*/
+kind:
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
+                                                               { full_kind_of $loc $2 $4 $6 }
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
+                                                               { linrow_kind_of $loc $2 $4 }
+| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2)       $2 }      
+| COLONRARROW CONSTRUCTOR                                      { kind_and_subkind_of $loc($2) $2 }
+
+subkind:
+| COLONRARROW LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN      { full_subkind_of $loc $3 $5      }
+| COLONRARROW CONSTRUCTOR                                      { subkind_of $loc($2) $2 }
+
+typearg:
+| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
+| VARIABLE kind                                                { attach_kind ($1, $2)                      }
+
+type_var_list:
+| separated_nonempty_list(COMMA, typearg)                      { $1 }
+
+/*
  * Datatype grammar
  */
 just_datatype:
@@ -1110,7 +1121,7 @@ mu_datatype:
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { Datatype.Forall ($2, $4) }
+| FORALL type_var_list DOT datatype                            { Datatype.Forall ($2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.
@@ -1135,6 +1146,7 @@ session_datatype:
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | primary_datatype                                             { $1                       }
+/* type aliases from other modules */
 | qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
 | qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 
@@ -1172,7 +1184,12 @@ primary_datatype:
                                                                    | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])
                                                                }
+/* TmpNOTE: this is what the issue post is parsed in as */                                                              
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
+
+/*
+  Type argument/application related
+*/
 
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar (named_typevar $1  `Rigid)   }
@@ -1188,9 +1205,11 @@ type_arg_list:
 
 /* Kind signatures */
 type_arg:
-| datatype                                                     { Datatype.Type        $1 }
-| braced_fieldspec                                             { Datatype.Presence    $1 }
-| LBRACE erow RBRACE                                           { Datatype.Row         $2 }
+| datatype                                                     { Datatype.UnresolvedKind $1 }
+/* TODO Change this or remove */
+| UNDERSCORE datatype                                          { Datatype.Type           $2 }
+| braced_fieldspec                                             { Datatype.Presence       $1 }
+| LBRACE erow RBRACE                                           { Datatype.Row            $2 }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }

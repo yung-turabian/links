@@ -1,5 +1,17 @@
 Infer Type Variable
-typename Id(a) = a;
+typename TBase(a) = a; TBase(2)
+stdout : TBase(2) : [|TBase:Int|_::Any|]
+
+Infer Type Variable [2]
+typename TBase(a) = a; TBase(stringToXml("Hello, World"))
+stdout : TBase(Hello, World) : [|TBase:Xml|_::Any|]
+
+Qualified type variables can infer their kind if enabled [typename]
+typename Arrow(a) = () -a-> ();
+stdout : () : ()
+
+Qualified type variables can infer their kind if enabled [forall]
+sig f : forall a. () -a-> () fun f() {}
 stdout : () : ()
 
 Infer Effect Row Variable
@@ -10,6 +22,6 @@ Infer Presence Variable
 typename T(p) = (foo{p}); (foo=4200) : T({:Int})
 stdout : (foo = 4200) : T ({:Int})
 
-Infer kinds
+Infer type arguments
 typename Id(a, e) = (a) ~e~> a; sig id : Id(a, e) fun id(x) { x } id(4)
 stdout : 4 : Int

@@ -66,6 +66,7 @@ let unpack_var_id = function
   | _ -> raise found_non_var_meta_var
 
 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
+  | Datatype.UnresolvedKind _ -> PrimaryKind.Type
   | Datatype.Type _ -> PrimaryKind.Type
   | Datatype.Row _ -> PrimaryKind.Row
   | Datatype.Presence _ -> PrimaryKind.Presence
@@ -296,6 +297,7 @@ module Desugar = struct
     let open Datatype in
     let open PrimaryKind in
     match ta with
+    | UnresolvedKind k -> Type, row alias_env k node
     | Type t     -> Type, datatype alias_env t
     | Row r      -> Row, row alias_env r node
     | Presence f -> Presence, fieldspec alias_env f node
