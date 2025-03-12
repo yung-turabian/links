@@ -172,7 +172,7 @@ as
 
 The C<asList> function extracts an entire table at once:
 
-  sig asList : (TableHandle((|a::Base),_,_)) -> [(|a::Base)]
+  sig asList : (TableHandle((|a:>Base),_,_)) -> [(|a:>Base)]
   fun asList(t) {for (z <-- t) [z]}
 
 Thus the following expression gives the same result as the previous
@@ -687,7 +687,7 @@ the field in the row are base types. Type inference introduces subkind
 annotations when inferring the type of a query.
 
   links> fun (e) {query {e}};
-  fun : ([(|a::Base)]) -> [(|a::Base)]
+  fun : ([(|a:>Base)]) -> [(|a:>Base)]
 
 The base types are: C<Int>, C<Bool>, C<Float>, C<Char> and C<String>.
 

@@ -41,7 +41,7 @@ sig run : (Comp(a)) ~> a
 fun run(m) {m()}
 
 # failure
-sig fail : forall a, e::Eff . () {Fail:Zero|e}-> a
+sig fail : forall a, e:>Eff . () {Fail:Zero|e}-> a
 fun fail() {switch(do Fail) { }}
 
 sig maybe : (Comp(a, {Fail:Zero|e})) -> Comp(Maybe(a), { Fail{_} |e})

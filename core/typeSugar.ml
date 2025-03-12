@@ -1979,8 +1979,8 @@ let add_empty_usages (p, t) = (p, t, Usage.empty)
 let type_unary_op pos env =
   let datatype = datatype env.tycon_env in
   function
-  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) { |_::Any}-> Int")
-  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) { |_::Any}-> Float")
+  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) { |_:>Any}-> Int")
+  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) { |_:>Any}-> Float")
   | UnaryOp.Name n     ->
      try
        add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)

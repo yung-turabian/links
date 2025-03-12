@@ -4,7 +4,7 @@ typename Username = String;
 typename Password = String;
 typename User = (name:Username, password:Password);
 
-typename Checker(s::Session) = [+|Accept:s, Reject:!Error.EndBang|+];
+typename Checker(s:>Session) = [+|Accept:s, Reject:!Error.EndBang|+];
 typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.EndBang));
 
 # We could use this slightly more general type for reportError:
@@ -40,7 +40,7 @@ fun generateNonce() {
   floatToInt(random() *. 65536.0)
 }
 
-sig reportError : (Error, Checker(s::Session)) ~> EndBang
+sig reportError : (Error, Checker(s:>Session)) ~> EndBang
 fun reportError(e, s) {
   var s = select Reject s;
   send(e, s)

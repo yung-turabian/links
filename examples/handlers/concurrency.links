@@ -3,7 +3,7 @@
 #
 
 # type of a concurrent computation
-typename Co(e::Eff) = Comp ((), {Fork  : (Co({ |e})) => (),
+typename Co(e:>Eff) = Comp ((), {Fork  : (Co({ |e})) => (),
                                  Yield : () | e});
 
 ## cooperative concurrency interface
@@ -37,7 +37,7 @@ fun dequeue() {do Dequeue}
 ## process queues
 
 # process queue computations
-typename Proc(e::Eff) =
+typename Proc(e:>Eff) =
   Comp ((), {Enqueue:(Proc({ |e})) => (),
              Dequeue:Maybe(Proc({ |e}))
             |e});

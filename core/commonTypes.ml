@@ -54,6 +54,7 @@ module Restriction = struct
     | Mono
     | Session
     | Effect
+    | Name of string
     [@@deriving eq,show]
 
   let is_any = function
@@ -77,11 +78,12 @@ module Restriction = struct
     | _      -> false
 
   let to_string = function
-    | Any     -> "Any"
-    | Base    -> "Base"
-    | Mono    -> "Mono"
-    | Session -> "Session"
-    | Effect  -> "Eff"
+    | Any      -> "Any"
+    | Base     -> "Base"
+    | Mono     -> "Mono"
+    | Session  -> "Session"
+    | Effect   -> "Eff"
+    | Name str -> str
 
   let min l r =
     match l, r with

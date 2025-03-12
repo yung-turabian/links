@@ -6,7 +6,7 @@ typename Two = Bool;
 typename One = ();
 
 # type of a concurrent computation
-typename Co(e::Eff, a) = Comp (a, {Fork  : Two,
+typename Co(e:>Eff, a) = Comp (a, {Fork  : Two,
                                    Yield : One,
                                    Stop  : Zero | e});
 
@@ -45,8 +45,8 @@ fun test() {
 # yields a value returns a pair of the value and a list of unfinished
 # resumptions
 mutual {
-  typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
-  typename ResList(e::Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
+  typename Res(e:>Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
+  typename ResList(e:>Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
 }
 
 # Links (following OCaml) only infers recursive types when all

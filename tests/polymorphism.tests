@@ -74,7 +74,7 @@ exit : 1
 
 Polymorphic effects for curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
-stdout : fun : ((a::Any) ~b~> (c::Any) ~b~> d) -> ([a::Any]) -> ([c::Any]) ~b~> [d]
+stdout : fun : ((a:>Any) ~b~> (c:>Any) ~b~> d) -> ([a:>Any]) -> ([c:>Any]) ~b~> [d]
 
 Polymorphic function parameters (unannotated)
 fun (f) {(f(42), f(true))}
@@ -94,7 +94,7 @@ fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
 stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
 
 Polymorphic function arguments and freeze
-fun poly(f : (forall a::Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
+fun poly(f : (forall a:>Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
 stdout : (42, true) : (Int, Bool)
 
 Top-level ill-typed polymorphism
@@ -120,7 +120,7 @@ stderr : @..*
 exit : 1
 
 Missing quantifier with mixed kinds (2)
-sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f
+sig f : forall e:>Eff.(a) ~e~> a fun f(x) {f(x)} f
 stderr : @..*
 exit : 1
 
@@ -130,7 +130,7 @@ stderr : @..*
 exit : 1
 
 Missing quantifier with mixed kinds (4)
-sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f
+sig f : forall e:>Eff.(a) ~e~> a fun f(x) {x} f
 stderr : @..*
 exit : 1
 
@@ -151,11 +151,11 @@ var x = (id=id); (~x).id(2)
 stdout : 2 : Int
 
 Varying arities of foralls (1)
-(~id) : forall a::Any. forall e::Row. (a) -e-> a
-stdout : fun : (a::Any) -> a::Any
+(~id) : forall a:>Any. forall e::Row. (a) -e-> a
+stdout : fun : (a:>Any) -> a:>Any
 
 Varying arities of foralls (2)
-(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
+(~id) : forall a:>Any. forall e::Row. forall b. (a) -e-> a
 exit : 1
 stderr : @.*Type error:.*
 
@@ -205,7 +205,7 @@ args : --set=show_quantifiers=true
 Type abstraction: correct, polymorphic body
 /\ [a]. { $(fun(x){x}) }
 exit : 0
-stdout : fun : forall a,b::(Any,Any),c::Row.(b::Any) -c-> b::Any
+stdout : fun : forall a,b::(Any,Any),c::Row.(b:>Any) -c-> b:>Any
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in signature

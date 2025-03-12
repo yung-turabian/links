@@ -1,6 +1,6 @@
 typename Zero = [||];
 
-typename Comp(e::Eff,a) = (() ~e~> a);
+typename Comp(e:>Eff,a) = (() ~e~> a);
 
 sig runState :
         (Comp ({Get:s,  Put:(s) => ()|e}, a)) ->
@@ -80,7 +80,7 @@ fun showExpr(e) {
   }
 }
 
-typename SComp(e::Eff, a) =
+typename SComp(e:>Eff, a) =
   Comp ({Suspend:(Expr, SComp({ |e}, a)) => a|e}, a);
 
 sig suspend :

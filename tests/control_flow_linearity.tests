@@ -94,7 +94,7 @@ stdout : fun : () {Foo:() => Int|_::Lin}-> Int
 
 Operation annotation
 fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
-stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b::Any
+stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b:>Any) {Foo{_::Lin}|a::Lin}~> b:>Any
 
 
 # Usage of linear resources in handlers
@@ -192,12 +192,12 @@ stdout : 42well-typed() : ()
 
 The `faithfulSend` with CFL off
 fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
-stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
+stdout : fun : (!(a:>Any).End) -> (a:>Any) ~@ ()
 args : --set=track_control_flow_linearity=false
 
 The `faithfulSend` with CFL on
 fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
-stdout : fun : (!(a::Any).End) { |_::Lin}-> (a::Any) { |_::Lin}~@ ()
+stdout : fun : (!(a:>Any).End) { |_::Lin}-> (a:>Any) { |_::Lin}~@ ()
 
 The `dubiousSend` with CFL on
 fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} dubiousSend
@@ -212,12 +212,12 @@ stdout : fun : (!(String).End) {Choose{_::Lin}|_::Lin}~> ()
 
 S2.1 Channel version of `faithfulWrite` (with CFL off)
 fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
-stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
+stdout : fun : (!(a:>Any).End) -> (a:>Any) ~@ ()
 args : --set=track_control_flow_linearity=false
 
 S2.1 Channel version of `faithfulWrite` (with CFL on)
 fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
-stdout : fun : (!(a::Any).End) { |_::Lin}-> (a::Any) { |_::Lin}~@ ()
+stdout : fun : (!(a:>Any).End) { |_::Lin}-> (a:>Any) { |_::Lin}~@ ()
 
 S2.1 Subkinding of value linearity (with CFL off) (1)
 fun id(x) {x} id(42)
@@ -285,7 +285,7 @@ stdout : fun : (a) {Print:(String) =@ ()|_::Lin}-> a
 
 S2.3 Different types of verboseId (5)
 fun verboseId(x) {xlin; lindo Print("id is called"); x} verboseId
-stdout : fun : (a::Any) {Print:(String) =@ ()|_::Lin}-> a::Any
+stdout : fun : (a:>Any) {Print:(String) =@ ()|_::Lin}-> a:>Any
 
 S2.3 Different types of verboseId (6)
 linfun verboseId(x) {do Print("id is called"); x} {xlin; verboseId}
@@ -305,7 +305,7 @@ stdout : fun : (a) {Print:(String) =@ ()|_::Lin}-@ a
 
 S2.3 Different types of verboseId (10)
 linfun verboseId(x) {xlin; lindo Print("id is called"); x} {xlin; verboseId}
-stdout : fun : (a::Any) {Print:(String) =@ ()|_::Lin}-@ a::Any
+stdout : fun : (a:>Any) {Print:(String) =@ ()|_::Lin}-@ a:>Any
 
 S2.4 Restriction of row-based effect types (1)
 fun verboseClose(c:End) {xlin; var s = lindo Get; close(c); lindo Print(s)} verboseClose
@@ -313,4 +313,4 @@ stdout : fun : (End) {Get:() =@ a,Print:(a) =@ b|_::Lin}~> b
 
 S2.4 Restriction of row-based effect types (2)
 fun sandwichClose(g,f,h) {xlin; g(); close(f); h()} sandwichClose
-stdout : fun : (() { |a::Lin}~> (), End, () { |a::Lin}~> b::Any) { |a::Lin}~> b::Any
+stdout : fun : (() { |a::Lin}~> (), End, () { |a::Lin}~> b:>Any) { |a::Lin}~> b:>Any

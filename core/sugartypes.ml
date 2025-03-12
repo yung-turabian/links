@@ -448,6 +448,7 @@ and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
   | FreezeVar        of Name.t
+  | Subkind          of Name.t
   | QualifiedVar     of Name.t list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -564,6 +565,7 @@ and alias = aliasnode WithPos.t
 and aliasbody =
   | Typename of datatype'
   | Effectname of row'
+  | Class of PrimaryKind.t
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
@@ -671,6 +673,8 @@ struct
     | FreezeVar v -> singleton v
     | Section (Section.Name n) -> singleton n
     | FreezeSection (Section.Name n) -> singleton n
+
+    | Subkind sk -> singleton sk
 
     | Constant _
     | TextNode _

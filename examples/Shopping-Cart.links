@@ -2,7 +2,7 @@
 
 typename Item = (name : String, quantity : Int, price : Float , id: Int);
 typename Cmd = [|Update : (Int, Int) | Delete : Int |];
-typename ActionableItem(e::Eff) = (item : Item, deleteAction : () ~e~> (), updateAction: () ~e~> ());
+typename ActionableItem(e:>Eff) = (item : Item, deleteAction : () ~e~> (), updateAction: () ~e~> ());
 
 var cartItems = [(name = "Apple", quantity = 5, price = 0.5, id = 0),
             (name = "Lettuce", quantity = 1, price = 0.95, id = 1),

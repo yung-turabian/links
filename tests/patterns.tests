@@ -36,7 +36,7 @@ stdout : 1 : Int
 
 Open record pattern
 fun (r) {switch (r) {case (l=l|s) -> s}}
-stdout : @fun : \(\(l:_\|([a-z])::Any\)\) -> \(l-\|\1::Any\)
+stdout : @fun : \(\(l:_\|([a-z]):>Any\)\) -> \(l-\|\1:>Any\)
 
 HasType pattern [1]
 switch (1) {case (0:Int) -> 0 case (1:Int) -> 1}
@@ -90,7 +90,7 @@ stdout : @fun : \(\[\|A\|_\|\]\) -> Int
 
 Negative pattern [1]
 fun (-Foo) { () }
-stdout : fun : ([|Foo:_::Any|_::Any|]) -> ()
+stdout : fun : ([|Foo:_:>Any|_:>Any|]) -> ()
 
 Negative pattern [2]
 (fun (-Foo) { () })(Bar)
@@ -103,7 +103,7 @@ exit : 1
 
 Negative pattern [4]
 fun (-(Foo,Bar,Baz)) { () }
-stdout : fun : ([|Bar:_::Any|Baz:_::Any|Foo:_::Any|_::Any|]) -> ()
+stdout : fun : ([|Bar:_:>Any|Baz:_:>Any|Foo:_:>Any|_:>Any|]) -> ()
 
 Negative pattern [5]
 (fun (-(Foo,Bar,Baz)) { () })(Bar)
@@ -140,7 +140,7 @@ stdout : 42 : Int
 
 Negative pattern [10]
 fun(-Foo as r) { r }
-stdout : fun : ([|Foo:_::Any|b::Any|]) -> [|Foo-|b::Any|]
+stdout : fun : ([|Foo:_:>Any|b:>Any|]) -> [|Foo-|b:>Any|]
 
 Negative pattern [11]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(Foo)

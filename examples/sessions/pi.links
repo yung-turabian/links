@@ -55,7 +55,7 @@ fun repeatReceive(d, p)() {
 
 #typename Service(s) = AP(s);
 #
-#sig serve : forall s::Session.((~s) ~e~> ()) ~> Service(s)
+#sig serve : forall s:>Session.((~s) ~e~> ()) ~> Service(s)
 #fun serve(f) {
 #  var p = new();
 #  fun reproduce(ap, f) {
@@ -67,12 +67,12 @@ fun repeatReceive(d, p)() {
 #  p
 #}
 #
-#sig req : forall s::Session.(Service(s)) ~> s
+#sig req : forall s:>Session.(Service(s)) ~> s
 #fun req(s) {
 #  accept(s)
 #}
 #
-##sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+##sig reproduce : forall s:>Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
 #sig rep : (Proc) {}~> Proc
 #fun rep(p)() {
 #  reproduce(new(), fun (s) {p()})

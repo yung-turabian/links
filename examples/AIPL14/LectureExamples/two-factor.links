@@ -59,7 +59,7 @@ fun generateNonce() {
   floatToInt(random() *. 65536.0)
 }
 
-#sig reportError : (Error, Checker(s::Session)) ~> EndBang
+#sig reportError : (Error, Checker(s:>Session)) ~> EndBang
 fun reportError(e, s) {
   var s = select Reject s;
   send(e, s)

@@ -818,6 +818,7 @@ class map =
       function
         | Typename _x -> Typename (o#datatype' _x)
         | Effectname _x -> Effectname (o#row' _x)
+        (*| Subkind _x -> Subkind (o#)*)
 
     method alias : alias -> alias =
       fun p ->

@@ -5,7 +5,7 @@
 # whilst the encoded implementations are adapted from Hillerström and
 # Lindley (2018).
 
-typename Comp(e::Eff,a) = () ~e~> a;
+typename Comp(e:>Eff,a) = () ~e~> a;
 
 # Basic combinators.
 sig await : () { Await: s |e}-> s
@@ -67,15 +67,15 @@ fun collect(m) {
 
 module Deep {
   mutual {
-    typename Producer(e::Eff, s, a) = () ~e~> (Consumer({ |e}, s, a)) ~e~> a;
-    typename Consumer(e::Eff, s, a) = (s) ~e~> (Producer({ |e}, s, a)) ~e~> a;
+    typename Producer(e:>Eff, s, a) = () ~e~> (Consumer({ |e}, s, a)) ~e~> a;
+    typename Consumer(e:>Eff, s, a) = (s) ~e~> (Producer({ |e}, s, a)) ~e~> a;
   }
 
-  typename Pipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
+  typename Pipe(e:>Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
                (Comp({ Await: s, Yield{c} |e}, a)) { Await{b}, Yield{c} |e}~>
                       (Producer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 
-  typename Copipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
+  typename Copipe(e:>Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
             (Comp({ Await{b}, Yield: (s) => () |e}, a)) { Await{b}, Yield{c} |e}~>
                    (Consumer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 
@@ -170,8 +170,8 @@ module Deep {
 }
 
 module Shallow {
-  typename Prod(e::Eff,o,a) = ()   {Yield:(o) => () |e}~> a;
-  typename Cons(e::Eff,i,a) = (i) {Await:i |e}~> a;
+  typename Prod(e:>Eff,o,a) = ()   {Yield:(o) => () |e}~> a;
+  typename Cons(e:>Eff,i,a) = (i) {Await:i |e}~> a;
 
   module Direct {
     mutual {

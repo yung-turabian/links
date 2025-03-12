@@ -1,5 +1,5 @@
 Type variables are correctly scoped [1]
-typename A = forall a::Eff. forall a::Type. () ~a~> ();
+typename A = forall a:>Eff. forall a::Type. () ~a~> ();
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
@@ -15,12 +15,12 @@ exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
 Subkind declaration mismatches are reported [forall]
-() : forall a::Base. a::Any
+() : forall a:>Base. a:>Any
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
 Subkind declaration mismatches are reported [typename]
-typename A(a::Base) = a::Any;
+typename A(a:>Base) = a:>Any;
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 

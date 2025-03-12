@@ -235,7 +235,7 @@ args : --enable-handlers
 
 Operation parameter pattern-matching (7)
 fun(m) { handle(m()) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
+stdout : fun : (() {Move:([|Alice|Bob|_|]) => _:>Any|c}~> Char) {Move{_}|c}~> Char
 args : --enable-handlers
 
 Operation parameter pattern-matching (8)
@@ -463,7 +463,7 @@ args : --enable-handlers
 
 Omission of resumption for nullary operations (3)
 fun(m) { handle(m()) { case <Foo> -> 5 } }
-stdout : fun : (() {Foo:() => _::Any|b}~> Int) {Foo{_}|b}~> Int
+stdout : fun : (() {Foo:() => _:>Any|b}~> Int) {Foo{_}|b}~> Int
 args : --enable-handlers
 
 Operation annotation (1)
@@ -474,7 +474,7 @@ args : --enable-handlers
 
 Operation annotation (2)
 fun(f)(m) { handle(m()) { case <Foo(x : Bool) => k> -> k (f (x)) } }
-stdout : fun : ((Bool) {Foo{a}|b}~> c::Any) -> (() {Foo:(Bool) => c::Any|b}~> e) {Foo{a}|b}~> e
+stdout : fun : ((Bool) {Foo{a}|b}~> c:>Any) -> (() {Foo:(Bool) => c:>Any|b}~> e) {Foo{a}|b}~> e
 args : --enable-handlers
 # NOTE: stdout is different from handlers.tests since the default printing behaiour is changed (the `Any` kind of row variables is omitted)
 

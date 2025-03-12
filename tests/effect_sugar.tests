@@ -55,7 +55,7 @@ stdout : fun : (() {E:() => ()|_}~> ()) -_-> () {E{_}|_}~> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [3], type alias
-typename T(a, e::Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
+typename T(a, e:>Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
 stdout : fun : T (_,{ |_})
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
@@ -65,7 +65,7 @@ stdout : fun : T (_,{ |_})
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [4], type alias implicit
-typename T(a, e::Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
+typename T(a, e:>Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
 stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 
@@ -111,12 +111,12 @@ stdout : fun : (() {E:() => ()|a}~> (), () {F:() => ()|b}~> ()) -> (() ~a~> (), 
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
 
 Printer: alias_omit [1], printer only
-typename T(a, e::Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
+typename T(a, e:>Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
 stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 
 Printer: alias_omit [2], desugaring + printer
-typename T(a, e::Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
+typename T(a, e:>Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
 stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 

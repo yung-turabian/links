@@ -145,11 +145,6 @@ let kind_of p =
   | "Type"     -> (Some pk_type, None)
   | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
   | "Presence" -> (Some pk_presence, None)
-  (* subkind of type abbreviations *)
-  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
-  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -162,6 +157,16 @@ let subkind_of p =
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
+let kind_and_subkind_of p =
+  function
+  (* subkind abbreviations *)
+  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
+  | "Lin"     ->  (Some pk_type, Some (lin_unl, res_any)) (* for linear effect vars *)
+  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
+  | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
+ 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
 
 let attach_kind (t, k) = SugarQuantifier.mk_unresolved t k `Rigid
@@ -348,7 +353,7 @@ let any = any_pat dp
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONRARROW LARROWCOLON
 %token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
@@ -376,7 +381,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME
+%token TYPENAME EFFECTNAME CLASS INSTANCE
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -480,6 +485,7 @@ nofun_declaration:
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
+| subkindclassdecl SEMICOLON                                   { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -543,6 +549,52 @@ typedecl:
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
+/* 
+  Working on. Should denote what Kind it dervies from and/or subkinds 
+
+  Also need a new alias function to add to environment.
+
+  I imagine it would look something like this:
+
+  subkind Numeric = Type :> Base :> Numeric;
+  or short-hand
+  subkind Numeric = Base :> Numeric; (since it should be known that Base already derives from Type)
+  
+  WORK ON THIS
+
+  sig plusInt : (Int, Int) -> Int
+  fun plusInt(x, y) {
+    x + y
+  }
+  class Numeric a {
+    (+) :: a -> a -> a
+    (*) :: a -> a -> a
+  }
+
+  instance Num Int {
+    (+) = plusInt
+    (*) = mulInt
+  }
+
+  TODO There needs to be a new heuristic that checks if a the type variable needs a certain operation provided
+       by subkind. This could absolve a future issue where the system doesnt know how to subkind to the proper one.
+*/
+subkindclassdecl:
+| CLASS CONSTRUCTOR LARROWCOLON kindarg                        { alias $loc $2 [] (Class ($4))}
+
+kindarg:
+| CONSTRUCTOR                                                  { let open Datatype in
+                                                                 match $1 with
+                                                                   | "Type"    -> pk_type
+                                                               }
+
+/*kind_opt:
+| { [] } // Illegal
+| kind_relation_list                                           { $1 }
+
+kind_relation_list:
+| separated_nonempty_list(COLONRARROW, kindarg)                { $1 }*/
+
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
 | LBRACKET varlist RBRACKET                                    { $2 }
@@ -557,10 +609,11 @@ kind:
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
                                                                { linrow_kind_of $loc $2 $4 }
 | COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
+| COLONRARROW CONSTRUCTOR                                      { kind_and_subkind_of $loc($2) $2 }
 
 subkind:
-| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
+| COLONRARROW LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN      { full_subkind_of $loc $3 $5 }
+| COLONRARROW CONSTRUCTOR                                      { subkind_of $loc($2) $2     }
 
 typearg:
 | VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
@@ -1014,7 +1067,7 @@ binding:
 | fun_kind VARIABLE arg_lists perhaps_location block           { fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
-| typedecl SEMICOLON | links_module
+| typedecl SEMICOLON | links_module | subkindclassdecl SEMICOLON
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:

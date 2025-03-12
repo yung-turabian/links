@@ -1,7 +1,7 @@
 typename Zero = [||];
 
 typename Comp(a) = (() ~> a);
-typename CF(a, e::Eff) = Comp(a, {Choice: (()) => Bool,
+typename CF(a, e:>Eff) = Comp(a, {Choice: (()) => Bool,
                                   Failure:(()) => Zero|e});
 
 sig choice : Comp(Bool, {Choice:(()) => Bool|_})

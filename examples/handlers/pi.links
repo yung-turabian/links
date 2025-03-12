@@ -107,8 +107,8 @@ fun collectEstimations(n)() {
 }
 
 # Multi-handler
-typename Resumption(a, e::Eff, r) = (a) ~e~> r;
-typename Step(a, e::Eff, r) =
+typename Resumption(a, e:>Eff, r) = (a) ~e~> r;
+typename Step(a, e:>Eff, r) =
                 (mu b . [|Done:r
                          |Yielded:(a, Resumption((), { |e}, b))
                          |Awaits:Resumption(a, { |e}, b)
@@ -137,8 +137,8 @@ fun exchange(f, g) {
 }
 
 # Shallow handler
-typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
-typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) => () |e}~> b;
+typename Consumer(a, e:>Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
+typename Producer(a, e:>Eff, b) = () {Abort:Zero, Yield:(a) => () |e}~> b;
 
 mutual {
   sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b

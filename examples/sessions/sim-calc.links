@@ -44,5 +44,5 @@ fun main() {
 main()
 
 
-#sig sel : ((s::Session) ~e~@ c::Any) -> (!c::Any.End) ~e~> ~s::Session
+#sig sel : ((s:>Session) ~e~@ c:>Any) -> (!c:>Any.End) ~e~> ~s:>Session
 #fun sel(f)(c) {knife (linfun (d) {ignore(send(f(d), c))})}

@@ -51,7 +51,7 @@ fun sortBy (f, l) {
   }
 }
 
-unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
+unsafe sig sortByBase : ((a) -b-> (| _:>Base), [a]) -b-> [a]
 fun sortByBase(f, l) {
   switch (l) {
     case [] -> []
@@ -567,7 +567,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+sig asList : (TableHandle((|a:>Base),(|_:>Base),(|_:>Base))) {}-> [(|a:>Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }
@@ -1336,8 +1336,8 @@ typename Pid(a::Type) = Process({hear: a});
 # The SessionFail is defined to be a control-flow-linear operation.
 # The effect row variable `e` can have kind `Row(Any)` because no linear
 # resources is used in this function.
-#sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+#sig fork : forall s:>Session,e::Row.((s) ~e~> ()) ~e~> ~s
+sig fork : forall s:>Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1346,8 +1346,8 @@ fun fork(f) {
   request(ap)
 }
 
-#sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+#sig linFork : forall s:>Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+sig linFork : forall s:>Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   xlin;
   var ap = new();
@@ -1357,8 +1357,8 @@ fun linFork(f) {
   request(ap)
 }
 
-#sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
+#sig reproduce : forall s:>Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+sig reproduce : forall s:>Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   xlin;
   var x = accept(ap);
@@ -1375,8 +1375,8 @@ fun reproduce(ap, f) {
 # spawnAngel which allows us to spawn a process that will continue to
 # run even if the main process terminates.)
 
-#sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
+#sig connect : forall s:>Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s:>Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   xlin;
   var ap = new();
@@ -1421,8 +1421,8 @@ fun makeEndBang() {
 
 # with split ends we synchronise on the termination of each spawned
 # child process
-#sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
+#sig forkSync : forall s:>Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+sig forkSync : forall s:>Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
   xlin;
   var ap = new();
@@ -1434,8 +1434,8 @@ fun forkSync(f) {
   request(ap)
 }
 
-#sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
+#sig linForkSync : forall s:>Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+sig linForkSync : forall s:>Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   xlin;
   var ap = new();
@@ -1447,8 +1447,8 @@ fun linForkSync(f) {
   request(ap)
 }
 
-#sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
-sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
+#sig linkSync : forall s:>Session,e::Row.(s, ~s) ~e~> EndBang
+sig linkSync : forall s:>Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
   xlin;
   link(s, c);
@@ -1475,7 +1475,7 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(a, e::Eff) = () ~e~> a;
+typename Comp(a, e:>Eff) = () ~e~> a;
 typename Zero = [||];
 
 # Composition operators

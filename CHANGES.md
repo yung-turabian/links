@@ -81,7 +81,7 @@ change.
   signatures, e.g.
 
 ```links
-effectname State(s, e::Eff) = {Get:s, Put:(s) -> () |e};
+effectname State(s, e:>Eff) = {Get:s, Put:(s) -> () |e};
 ```
 
 defines an alias named `State` for an effect row with two operations
@@ -624,7 +624,7 @@ Version 0.9 includes an implementation of FreezeML:
   - Frozen lets (i.e., function definitions which never generalise their types)
     are written `~fun f(x) { x }`
   - Explicit function generalisation is written `$(fun(x) { x }` and produces a
-    term of type `forall a::Any,b::Row. (a) -b-> a`
+    term of type `forall a:>Any,b::Row. (a) -b-> a`
   - Explicit instantiation is written using `@`
 
 The previous work on "explicit quantification" has been removed.
@@ -638,7 +638,7 @@ the number of times where explicit effect variables are required.
   - Higher-order functions share an effect variable with their calling context: for example,
     `map : ((a) -e-> b, [a]) -e-> [b]` can be written as `map : ((a) -> b, [a]) -> [b]`.
   - Type names can now be written with an implicit effect variable, for example
-    `typename Comp(a) = () ~> a` can be written insetad of `Comp(a, e::Eff) = () ~e~> a, and
+    `typename Comp(a) = () ~> a` can be written insetad of `Comp(a, e:>Eff) = () ~e~> a, and
     `forever : Comp(()) ~> ()` can be written instead of `forever : Comp((), e) ~e~> ()`
   - Presence variables can be omitted from effects. As an example, we can
     write
