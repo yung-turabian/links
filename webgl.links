@@ -1,0 +1,37 @@
+open import WebGL;
+
+
+
+fun mainPage(_) {
+
+  # need to spawn a client for alien calls
+  var _ = spawnClient {
+		Gl.createContext();
+
+		Gl.clearColor(1.0, 0.0, 0.0, 1.0);
+
+		Gl.clear(Gl.color_buffer_bit())
+  };
+
+  #Mvu.run("placeholder", defaultGame, view,
+  #    fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+  #    subscriptions, MvuCommands.empty);
+  page
+  <html>
+    <head>
+      <title>WebGL Demo</title>
+    </head>
+    <body>
+				<canvas id="gl-canvas" width="640" height="480"></canvas>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+	# Optional
+  addStaticRoute("/lib", "js", [("js", "text/javascript")]);
+  servePages()
+}
+
+main()

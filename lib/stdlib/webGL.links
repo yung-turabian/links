@@ -1,0 +1,16 @@
+module Gl {
+  alien javascript "/lib/webgl.js" {
+
+		# Values, could better define as val : Type;, but need to figure out
+		# how to pass variabled from JS to here
+		color_buffer_bit : () -> Int;
+
+		# Functions
+    createContext : forall e::Row . () ~e~> ();
+    clearColor : forall e::Row . (Float, Float, Float, Float) ~e~> ();
+    clear : forall e::Row . (Int) ~e~> ();
+
+
+		alertBox : (String) ~%~> ();
+  }
+}
