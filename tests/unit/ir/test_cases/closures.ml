@@ -89,7 +89,7 @@ let error_closure_supply_kind_wrong = "Kind mismatch in type application"
 
 
 let prog_closure_quantifier_mismatch =
-  let base_sk = (fst Sugartypes.default_subkind, Restriction.Base) in
+  let base_sk = (fst CT.default_subkind, CT.res_base) in
 
   fun_ "f" (forall [q "T1"; q "T2"; q "T3"; q "T4"] ([] |--> (tvar "T2")))
     ~tparams:[q "Q1"; q "Q2"; q "Q3"; q "Q4"]

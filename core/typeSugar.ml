@@ -153,6 +153,7 @@ struct
     | Import _
     | Open _
     | AlienBlock _
+    | Class _
     | Module _
     | Fun _
     | Funs _
@@ -1659,6 +1660,9 @@ type context = Types.typing_environment = {
      and "Formlet". *)
   tycon_env : Types.tycon_environment;
 
+  (* mapping from a subkind name to a dictionary that contains relevant functions.*)
+  subkind_env : Types.subkind_environment;
+
   (* the current effects *)
   effect_row : Types.row;
 
@@ -1674,16 +1678,18 @@ type context = Types.typing_environment = {
 }
 
 let empty_context contlin eff desugared =
-  { var_env    = Env.empty;
-    rec_vars   = StringSet.empty;
-    tycon_env  = Env.empty;
-    effect_row = eff;
-    cont_lin   = contlin;
+  { var_env     = Env.empty;
+    rec_vars    = StringSet.empty;
+    tycon_env   = Env.empty;
+    subkind_env = Env.empty;
+    effect_row  = eff;
+    cont_lin    = contlin;
     desugared }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
+let bind_subkind     context (sk, sigs) = {context with subkind_env = Env.bind sk sigs context.subkind_env}
 let bind_effects     context r      = {context with effect_row = Types.flatten_row r}
 
 let lookup_effect    context name   =
@@ -1935,8 +1941,8 @@ let type_section pos context s =
     | Minus         -> Utils.instantiate env "-", Usage.empty
     | FloatMinus    -> Utils.instantiate env "-.", Usage.empty
     | Project label ->
-       let a = Types.fresh_type_variable (lin_unl, res_any) in
-       let rho = Types.fresh_row_variable (lin_unl, res_any) in
+       let a = Types.fresh_type_variable default_subkind in
+       let rho = Types.fresh_row_variable default_subkind in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
        let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
          ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho, false)); (PrimaryKind.Row, effects)],
@@ -1958,8 +1964,8 @@ let type_frozen_section context s =
     | Minus         -> Env.find "-" env, Usage.empty
     | FloatMinus    -> Env.find "-." env, Usage.empty
     | Project label ->
-       let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
-       let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
+       let a = Types.fresh_rigid_type_variable default_subkind in
+       let rho = Types.fresh_rigid_row_variable default_subkind in
        let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
        let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
        Types.for_all
@@ -2015,7 +2021,7 @@ let type_binary_op pos ctxt =
   | Name "<"
   | Name "<="
   | Name "<>"    ->
-      let a = Types.fresh_type_variable (lin_any, res_any) in
+      let a = Types.fresh_type_variable any_subkind in
       let eff = Types.make_empty_open_row default_effect_subkind in
         ([(PrimaryKind.Type, a); (PrimaryKind.Row, eff)],
          Function (Types.make_tuple_type [a; a], eff, Primitive Primitive.Bool),
@@ -2383,7 +2389,7 @@ let type_pattern ?(linear_vars=true) closed
   let fresh_var () =
     if linear_vars
     then Types.fresh_type_variable (lin_any, res_any)
-    else Types.fresh_type_variable (lin_unl, res_any) in
+    else Types.fresh_type_variable default_subkind in
 
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
@@ -2412,7 +2418,7 @@ let type_pattern ?(linear_vars=true) closed
         let t = Types.make_list_type (fresh_var ()) in
         Nil, (t, t)
       | Any ->
-        let t = Types.fresh_type_variable (lin_unl, res_any) in
+        let t = Types.fresh_type_variable default_subkind in
         Any, (t, t)
       | Constant c as c' ->
         let t = Primitive (Constant.type_of c) in
@@ -3918,7 +3924,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
-            let a = Types.fresh_type_variable (lin_unl, res_any) in
+            let a = Types.fresh_type_variable default_subkind in
             let ft = Instantiate.alias "Formlet" [PrimaryKind.Type, a] context.tycon_env in
               unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
@@ -3936,7 +3942,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 (fun (generators, generator_usages, environments) ->
                    function
                      | List (pattern, e) ->
-                         let a = Types.fresh_type_variable (lin_unl, res_any) in
+                         let a = Types.fresh_type_variable default_subkind in
                          let lt = Types.make_list_type a in
                          let pattern = tpc pattern in
                          let e = tc e in
@@ -3981,7 +3987,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let orderby = opt_map tc orderby in
             let () =
               unify ~handle:Gripers.iteration_body
-                (pos_and_typ body, no_pos (Types.make_list_type (Types.fresh_type_variable (lin_unl, res_any)))) in
+                (pos_and_typ body, no_pos (Types.make_list_type (Types.fresh_type_variable default_subkind))) in
             let () =
               opt_iter (fun where -> unify ~handle:Gripers.iteration_where
                           (pos_and_typ where, no_pos Types.bool_type)) where in
@@ -4122,7 +4128,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             ((exp_pos r, rt),
                              no_pos (T.Record (Types.make_singleton_open_row
                                                 (l, T.Present fieldtype)
-                                                (lin_unl, res_any))));
+                                                default_subkind)));
                           let r' = erase r in
                           let e = Projection (with_dummy_pos (tappl (r'.node, tyargs)), l) in
                           e, fieldtype, usages r
@@ -4133,7 +4139,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         unify ~handle:Gripers.projection
                           (pos_and_typ r, no_pos (T.Record (Types.make_singleton_open_row
                                                              (l, T.Present fieldtype)
-                                                             (lin_unl, res_any))));
+                                                             default_subkind)));
                         Projection (erase r, l), fieldtype, usages r
               end
         | With (r, fields) ->
@@ -4144,7 +4150,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               let fields_type =
                 T.Record (List.fold_right
                            (fun (lab, _) row ->
-                              Types.row_with (lab, T.Present (Types.fresh_type_variable (lin_unl, res_any))) row)
+                              Types.row_with (lab, T.Present (Types.fresh_type_variable default_subkind)) row)
                            fields (Types.make_empty_open_row (lin_any, res_any))) in
                 unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type) in
             let rfields, row_var, lr = (TypeUtils.extract_row (typ r)) |> Types.unwrap_row |> fst |> TypeUtils.extract_row_parts in
@@ -4296,10 +4302,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         | Any ->
                            let kt =
                              let domain =
-                               (Types.fresh_type_variable (lin_unl, res_any)) :: handler_params
+                               (Types.fresh_type_variable default_subkind) :: handler_params
                              in
                              let effects = Types.make_empty_open_row default_effect_subkind in
-                             let codomain = Types.fresh_type_variable (lin_unl, res_any) in
+                             let codomain = Types.fresh_type_variable default_subkind in
                              Types.make_function_type domain effects codomain
                            in
                            (pat, env, effrow), (kpat, Env.empty, kt)
@@ -4340,9 +4346,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         | Any ->
                            let kt =
                              Types.make_function_type
-                               [Types.fresh_type_variable (lin_unl, res_any)]
+                               [Types.fresh_type_variable default_subkind]
                                (Types.make_empty_open_row default_effect_subkind)
-                               (Types.fresh_type_variable (lin_unl, res_any))
+                               (Types.fresh_type_variable default_subkind)
                            in
                            (pat, env, effrow), (kpat, Env.empty, kt)
                         | _ -> assert false
@@ -4572,7 +4578,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
             | opt ->
               (* fresh variable case *)
-              let rettyp = Types.fresh_type_variable (lin_unl, res_any) in
+              let rettyp = Types.fresh_type_variable default_subkind in
                 DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
           in
 
@@ -5222,6 +5228,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
+      | Class cs ->
+          let env = List.fold_left (fun env {class=(name, type_var, sigs); _} ->
+            bind_subkind env (name, (pk_type, (lin_unl, name)))
+          ) empty context cs in
+          (Class cs, env, Usage.empty)
       | Import _
       | Open _
       | AlienBlock _

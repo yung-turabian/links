@@ -214,16 +214,20 @@ type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
-]
+] [@@deriving show]
 
-type environment        = datatype Env.String.t
-type tycon_environment  = tycon_spec Env.String.t
-type typing_environment = { var_env    : environment ;
-                            rec_vars   : Utility.StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_row : row ;
-                            cont_lin   : int ;
-                            desugared  : bool }
+type subkind_spec = Kind.t [@@deriving show]
+
+type environment         = datatype Env.String.t
+type tycon_environment   = tycon_spec Env.String.t
+type subkind_environment = subkind_spec Env.String.t
+type typing_environment  = { var_env     : environment ;
+                             rec_vars    : Utility.StringSet.t ;
+                             tycon_env   : tycon_environment ;
+                             subkind_env : subkind_environment ;
+                             effect_row  : row ;
+                             cont_lin    : int ;
+                             desugared   : bool }
 
 val empty_typing_environment : typing_environment
 

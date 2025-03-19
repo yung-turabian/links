@@ -67,6 +67,16 @@ and fun_def =
     fn_location : location;
     fn_unsafe   : bool
   }
+and alien_def =
+  { 
+    alien_binder: binder;
+    language: ForeignLanguage.t;
+    object_name: string 
+  }
+and class_def =
+  {
+    class_binder: binder;
+  }
 and temporal_update =
   | ValidTimeUpdate of valid_time_update
   | TransactionTimeUpdate
@@ -91,10 +101,9 @@ and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
   | Rec        of fun_def list
-  | Alien      of { binder: binder;
-                    language: ForeignLanguage.t;
-                    object_name: string }
+  | Alien      of alien_def
   | Module     of string * binding list option
+  | Class      of class_def
 and special =
   | Wrong      of Types.t
   | Database   of value
@@ -142,8 +151,9 @@ let binding_scope : binding -> scope =
   | Let (binder, _)
   | Fun {fn_binder = binder; _}
   | Rec ({fn_binder = binder; _}::_)
-  | Alien {binder; _ } -> Var.scope_of_binder binder
+  | Alien {alien_binder = binder; _} -> Var.scope_of_binder binder
   | Rec []
+  | Class _
   | Module _ -> assert false
 
 let binder_of_fun_def fb = fb.fn_binder

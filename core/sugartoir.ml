@@ -353,7 +353,7 @@ struct
 
     let alien_binding (x_info, object_name, language) =
       let xb, x = Var.fresh_var x_info in
-      lift_binding (Alien { binder = xb; object_name; language }) x
+      lift_binding (Alien { alien_binder = xb; object_name; language }) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -1343,7 +1343,7 @@ struct
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Import _ | Open _ | Fun _
-                | AlienBlock _ | Module _  -> assert false
+                | AlienBlock _ | Module _  | Class _ -> assert false
             end
 
   and evalv env e =
@@ -1400,10 +1400,10 @@ struct
                    | Scope.Local ->
                       partition (globals, b::locals, nenv) bs
                  end
-              | Alien { binder; _ }
-                   when Var.Scope.is_global (Var.scope_of_binder binder) ->
-                 let f = Var.var_of_binder binder in
-                 let f_name = Var.name_of_binder binder in
+              | Alien { alien_binder; _ }
+                   when Var.Scope.is_global (Var.scope_of_binder alien_binder) ->
+                 let f = Var.var_of_binder alien_binder in
+                 let f_name = Var.name_of_binder alien_binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
               | _ -> partition (globals, b::locals, nenv) bs
             end in

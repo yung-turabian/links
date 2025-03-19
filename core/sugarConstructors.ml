@@ -204,8 +204,20 @@ module SugarConstructors (Position : Pos)
     val_binding' ~ppos None (Pat pat, phrase, loc_unknown)
 
   (* Create a module binding. *)
-  let module_binding ?(ppos=dp) binder members =
-    with_pos ppos (Module { binder; members })
+  let module_binding ?(ppos=dp) bndr members =
+    with_pos ppos (Module { 
+                            module_binder = bndr; 
+                            module_members = members
+                          })
+
+  (* Create a subkind class binding. ADD superclass option *)
+  let class_binding ?(ppos=dp) bndr class_name class_type_variable class_signatures =
+    with_pos ppos (Class { 
+                            class_binder = bndr; 
+                            class_name = class_name;
+                            class_type_variable = class_type_variable;
+                            class_signatures = class_signatures
+                         })
 
   let type_abstraction ?(ppos=dp) tyvars phrase =
     with_pos ppos (TAbstr (tyvars, phrase))

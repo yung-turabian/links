@@ -31,6 +31,11 @@ let alias_env : Types.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
+(* Subkind (Class) environment *)
+module SignatureEnv = Env.String
+
+let subkind_env : Types.subkind_environment = DefaultSubkindClasses.subkind_env
+
 type primitive =
 [ Value.t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t Lwt.t ]
@@ -1527,6 +1532,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
+    
+
+    (* TODO this could be bootstrapped instead *)
 
     (* LINKS GAME LIBRARY *)
 
@@ -1792,6 +1800,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
+                  subkind_env = subkind_env;
                   Types.effect_row = Types.closed_wild_row;
                   Types.cont_lin = -1;
                   Types.desugared = false }

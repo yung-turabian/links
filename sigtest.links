@@ -1,0 +1,4 @@
+sig id : (a, a) -> a
+fun id (x, y) {
+		x
+}

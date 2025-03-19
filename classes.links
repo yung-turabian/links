@@ -1,0 +1,25 @@
+# Do not import directly, imported from Prelude.links
+# TODO Consider improving the `infix` to take a list: shorthand
+
+infix 4 ==;
+infix 4 <>;
+infix 4 <;
+infix 4 >;
+infix 4 <=;
+infix 4 >=;
+#infixr 3 &&;
+#infixr 2 ||;
+
+class Eq <: Type : a {
+		sig == : (a, a) -> Bool;
+		sig <> : (a, a) -> Bool;
+}
+
+class Ord <: Eq : a {
+		sig <= : (a, a) -> Bool;
+		sig >= : (a, a) -> Bool;
+		sig max : (a, a) -> a;
+		sig min : (a, a) -> a;
+}
+
+

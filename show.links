@@ -1,0 +1,9 @@
+
+class Show <: Type : a {
+		sig show : (a) -> String;	
+}
+
+#instance Show : Bool {
+#		show True  = "True";
+#		show False = "False";
+#}

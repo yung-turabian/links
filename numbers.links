@@ -1,0 +1,96 @@
+open import Classes;
+
+infixl 6 +;
+infixl 6 -;
+infixl 7 *;
+infixl 7 /;
+
+var pi = 3.14159265358979312 : Float;
+
+typename Nat = Int;
+typename TNat = [| Zero | Succ:TNat |];
+
+sig intOfNat : (TNat) ~> Int
+fun intOfNat(n) {
+		switch (n) {
+				case Zero -> 0
+				case Succ(m) -> 1 + intOfNat(m) 
+		}	
+}
+
+sig natOfInt : (Int) ~> TNat 
+fun natOfInt(i) {
+		if (i == 0)
+				Zero
+		else if (i > 0)
+				Succ(natOfInt(i-1))
+		else
+				error("natOfInt is undefined for negative integers")
+}
+
+# Mutually recursive functions
+mutual {
+		sig isOdd : (TNat) ~> Bool
+		fun isOdd(n) {
+			switch(n) {
+				case Zero -> false
+				case Succ(n) -> isEven(n)
+			}
+		}
+
+		sig isEven : (TNat) ~> Bool
+		fun isEven(n) {
+			switch(n) {
+				case Zero -> true
+				case Succ(n) -> isOdd(n)
+			}
+		}
+}
+
+sig isZero : (TNat) ~> Bool
+fun isZero(n) {
+		switch (n) {
+				case Zero -> true
+				case Succ(_) -> false
+		}
+}
+
+sig pred : (TNat) ~> TNat
+fun pred(n) {
+		switch (n) {
+				case Zero -> error("pred Zero is undefined.")
+				case Succ(m) -> m
+		}
+}
+
+sig addNat : (Int, Int) ~> Nat
+fun addNat(i1, i2) {
+
+		fun aux(n1, n2) {
+				switch (n1) {
+						case Zero -> n2
+						case Succ(pred_n) -> aux(pred_n, Succ(n2))
+				}
+		}
+
+		intOfNat( aux(natOfInt(i1), natOfInt(i2)) )
+}
+
+class Numeric <: Eq : a {
+		sig + : (a, a) -> a;
+		sig * : (a, a) -> a;
+		sig - : (a, a) -> a;
+		sig / : (a, a) -> a;
+}
+
+#instance Numeric : Int {
+#		fun + : (x, y) {
+#				addInt(x, y)
+#		}
+#} 
+
+#<: Base : a {
+#		(+) :: (a, a) -> a;
+#}
+
+#class Numeric <: Type : a {}

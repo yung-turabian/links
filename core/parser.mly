@@ -139,28 +139,32 @@ types the default linearity is Any. *)
 change "Any" to something more evocative of linearity - "Lin"
 perhaps. *)
 
+(* NOTE It might be a good idea to have different notation for kind vs subkind.
+:: for kind and <: for subkind. *)
+
+(* TODO Have to assume everything is a valid subkind *)
 let kind_of p =
-  function
+  let open Kind in function
   (* primary kind abbreviation  *)
   | "Type"     -> (Some pk_type, None)
   | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
   | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
-  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
-  | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
+  | k          -> if exists k then
+                        match (get k) with
+                        | (pk, sk) -> (Some pk, Some sk)
+                  else
+                    raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ 
+                            k ^ "\nHINT: Consider adding it to the environment with a subkind class...\n"))
 
 let subkind_of p =
-  function
-  (* subkind abbreviations *)
-  | "Any"     -> Some (lin_any, res_any)
-  | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
-  | "Base"    -> Some (lin_unl, res_base)
-  | "Session" -> Some (lin_any, res_session)
-  | "Eff"     -> Some (default_effect_lin, res_effect)
-  | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
+  let open Kind in function
+  | k          -> if exists k then
+                        match (get k) with
+                        | (_, sk) -> (Some sk)
+                  else
+                    raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ 
+                            k ^ "\nHINT: Consider adding it to the environment with a subkind class...\n"))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
 
@@ -199,6 +203,7 @@ let attach_presence_subkind (t, subkind) =
   in attach_subkind_helper update subkind
 
 
+(* for the creation of type/effect aliases *)
 let alias p name args aliasbody =
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])
 
@@ -247,29 +252,36 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
 
 let dummy_phrase pos = with_pos pos (Sugartypes.RecordLit ([], None))
 
+(* 
+   Refers to a `mutual` block. Where two functions are defined
+   that refer to each other. Example: 
+*)
 module MutualBindings = struct
 
   type mutual_bindings =
     { mut_types: alias list;
       mut_funs: (function_definition * Position.t) list;
+      mut_classes: (subkind_class_definition * Position.t) list;
       mut_pos: Position.t }
 
 
-  let empty pos = { mut_types = []; mut_funs = []; mut_pos = pos }
+  let empty pos = { mut_types = []; mut_funs = []; mut_classes = []; mut_pos = pos }
 
-  let add ({ mut_types = ts; mut_funs = fs; _ } as block) binding =
+  let add ({ mut_types = ts; mut_funs = fs; mut_classes = cs; _ } as block) binding =
     let pos = WithPos.pos binding in
     match WithPos.node binding with
     | Fun f ->
         { block with mut_funs = ((f, pos) :: fs) }
     | Aliases [t] ->
         { block with mut_types = (t :: ts) }
+    | Class c ->
+        { block with mut_classes = ((c, pos) :: cs) }
     | Aliases _ -> assert false
     | _ ->
         raise (ConcreteSyntaxError
-          (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
+          (pos, "Only `fun`, `typename` and `class` bindings are allowed in a `mutual` block."))
 
-  let check_dups funs tys =
+  let check_dups funs tys classes =
     (* Check to see whether there are any duplicate names, and report
      * an error if so. *)
   let check get_name xs =
@@ -287,16 +299,19 @@ module MutualBindings = struct
 
   let fun_name fn = Binder.to_name fn.fun_binder in
   let ty_name (n, _, _, _) = n in
+  let class_name c = Binder.to_name c.class_binder in
   let tys_with_pos =
       List.map (fun {WithPos.node=(n, qs, dt); pos} -> ((n, qs, dt, pos), pos))
         tys in
-  check fun_name funs; check ty_name tys_with_pos
+  check fun_name funs; 
+  check ty_name tys_with_pos; 
+  check class_name classes
 
 
-  let flatten { mut_types; mut_funs; mut_pos } =
+  let flatten { mut_types; mut_funs; mut_classes; mut_pos } =
     (* We need to take care not to lift non-recursive functions to
      * recursive functions accidentally. *)
-    check_dups mut_funs mut_types;
+    check_dups mut_funs mut_types mut_classes;
     let fun_binding = function
       | [] -> []
       | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
@@ -316,7 +331,15 @@ module MutualBindings = struct
     let type_binding = function
       | [] -> []
       | ts -> [WithPos.make ~pos:mut_pos (Aliases (List.rev ts))] in
-    type_binding mut_types @ fun_binding mut_funs
+
+    let class_binding = function
+      | [] -> []
+      | [(c, pos)] ->
+          let { class_binder; class_name; class_type_variable; class_signatures } = c in
+          [WithPos.make ~pos (Class { class_binder; class_name; class_type_variable; class_signatures })]
+    in
+
+    type_binding mut_types @ fun_binding mut_funs @ class_binding mut_classes
 end
 
 let parse_foreign_language pos lang =
@@ -348,7 +371,7 @@ let any = any_pat dp
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON LARROWCOLON
 %token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
@@ -376,6 +399,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
+%token CLASS INSTANCE
 %token TYPENAME EFFECTNAME
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
@@ -468,6 +492,8 @@ declaration:
 
 nofun_declaration:
 | alien_block                                                  { $1 }
+| class_declaration                                            { $1 }
+//| instance_declaration                                         { $1 }
 | ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { let alien =
                                                                    let binder = binder ~ppos:$loc($4) $4 in
                                                                    let datatype = datatype $6 in
@@ -482,6 +508,94 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
+
+/* 
+  Working on. Should denote what Kind it dervies from and/or subkinds 
+
+  Also need a new alias function to add to environment.
+
+  I imagine it would look something like this:
+
+  subkind Numeric = Type :: Base :: Numeric;
+  or short-hand
+  subkind Numeric = Base :: Numeric; (since it should be known that Base already derives from Type)
+  
+  WORK ON THIS
+
+  sig plusInt : (Int, Int) -> Int
+  fun plusInt(x, y) {
+    x + y
+  }
+  class Numeric <: Base : a {
+    sig + : (a,a) -> a;
+  }
+
+  instance Numeric Int {
+    (+) = plusInt
+    (*) = mulInt
+  }
+
+  TODO There needs to be a new heuristic that checks if a the type variable needs a certain operation provided
+       by subkind. This could absolve a future issue where the system doesnt know how to subkind to the proper one.
+*/
+
+instance_content:
+| fun_declaration                                             { $1 }
+| VARIABLE                                                    { $1 }
+
+// Something better than constant?
+instance_method:
+| OPERATOR constant EQ instance_content SEMICOLON             { ($1, $2) }
+| OPERATOR VARIABLE EQ instance_content SEMICOLON             { ($1, $2) }
+| VARIABLE constant EQ instance_content SEMICOLON             { ($1, $2) }
+| VARIABLE VARIABLE EQ instance_content SEMICOLON             { ($1, $2) }
+
+instance_methods:
+| instance_method+                                             { $1 }
+
+instance_declaration:
+| INSTANCE CONSTRUCTOR COLON CONSTRUCTOR 
+  LBRACE instance_methods RBRACE                               {    }
+
+/*instance_declaration:
+| INSTANCE CONSTRUCTOR COLON CONSTRUCTOR 
+  LBRACE instance_methods RBRACE
+    { 
+      let class_binder = binder ~ppos:$loc($2) $2 in
+      let class_name = $2 in
+      let class_type_variable = datatype $4 in
+      let class_signatures = $6 in
+      class_binding ~ppos:$loc($1) class_binder class_name class_type_variable class_signatures
+    }*/
+
+class_signature:
+| SIG OPERATOR COLON datatype SEMICOLON                        { ($2, datatype $4) }
+| SIG VARIABLE COLON datatype SEMICOLON                        { ($2, datatype $4) }
+
+class_signatures:
+| class_signature+                                             { $1 }
+
+class_declaration:
+| CLASS CONSTRUCTOR COLON datatype 
+  LBRACE class_signatures RBRACE
+    { 
+      let class_binder = binder ~ppos:$loc($2) $2 in
+      let class_name = $2 in
+      let class_type_variable = datatype $4 in
+      let class_signatures = $6 in
+      class_binding ~ppos:$loc($1) class_binder class_name class_type_variable class_signatures
+    }
+
+| CLASS CONSTRUCTOR LARROWCOLON CONSTRUCTOR 
+  COLON datatype
+  LBRACE class_signatures RBRACE
+    { 
+      let class_binder = binder ~ppos:$loc($2) $2 in
+      let class_name = $2 in
+      let class_type_variable = datatype $6 in
+      let class_signatures = $8 in
+      class_binding ~ppos:$loc($1) class_binder class_name class_type_variable class_signatures
+    }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -943,6 +1057,22 @@ seq_expression:
 // | LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) } // deprecated
 | LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
 
+// TODO, consider if ~> vs -> and also different signatures.
+/*class_expression:
+| LPAREN OPERATOR RPAREN COLONCOLON datatype straight_arrow
+  datatype straight_arrow datatype SEMICOLON                   
+  { with_pos $loc (ClassMethod ($2, 
+  (datatype $5), (datatype $7), (datatype $9) ) ) }
+(*| methods = separated_list(SEMICOLON, class_method) 
+  {
+    {
+      class_name = class_name;
+      class_superclass = superclass;
+      class_type_variable = type_var;
+      class_methods = methods;
+    }
+  }*)*/
+
 exp:
 | seq_expression
 | case_expression
@@ -1007,6 +1137,7 @@ record_labels:
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
 
+// Local to a block? I presume...
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
@@ -1016,6 +1147,8 @@ binding:
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
+// If above is true, probably shouldn't do this, but maybe
+//| class_declaration                                            { $1 }
 
 mutual_binding_block:
 | MUTUAL LBRACE mutual_bindings RBRACE                         { MutualBindings.flatten $3 }

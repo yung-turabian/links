@@ -259,7 +259,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       with NotFound _ -> raise (Errors.unbound_tycon (SourceCode.WithPos.pos dt) tycon)
     in
     match ListUtils.last_opt param_kinds with
-    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
+    | Some (PrimaryKind.Row, (_, "Effect")) -> Some `Alias
     | _ -> None )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
   | _ -> None
@@ -335,7 +335,7 @@ let cleanup_effects tycon_env =
                | _, [] -> []
                | [], Row t :: ts ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go ([], ts)
-               | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts
+               | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts
                  ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go (qs, ts)
                | (([] as qs) | _ :: qs), t :: ts ->
@@ -466,7 +466,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
              when List.length param_kinds = List.length ts + 1 ->
                let poss_with_implicit =
                  match ListUtils.last param_kinds with
-                 | PrimaryKind.Row, (_, Restriction.Effect) ->
+                 | PrimaryKind.Row, (_, "Effect") ->
                      self#with_implicit
                  | _ -> self
                in
@@ -482,7 +482,7 @@ let gather_operation_of_type tp
     let module FieldEnv = Utility.StringMap in
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
-      primary = PrimaryKind.Row && restriction = Restriction.Effect
+      primary = PrimaryKind.Row && restriction = "Effect"
     in
     let o =
       object (o : 'self_type)
@@ -656,7 +656,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -707,7 +707,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -891,7 +891,7 @@ class main_traversal simple_tycon_env =
               let module PK = PrimaryKind in
               let process_type_arg i : Kind.t * type_arg -> Datatype.type_arg =
                 function
-                | (PK.Row, (_, Restriction.Effect)), Row r ->
+                | (PK.Row, (_, "Effect")), Row r ->
                     let _o, erow = o#effect_row ~in_alias:(Some tycon) r in
                     Row erow
                 | (PK.Row, _), Row r ->
@@ -925,7 +925,7 @@ class main_traversal simple_tycon_env =
 
               let may_procide_shared_effect =
                 match ListUtils.last_opt params with
-                | Some (PrimaryKind.Row, (_, Restriction.Effect)) ->
+                | Some (PrimaryKind.Row, (_, "Effect")) ->
                     has_effect_sugar ()
                 | _ -> false
               in

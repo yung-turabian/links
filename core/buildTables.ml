@@ -25,6 +25,10 @@ struct
         raise (Errors.internal_error
           ~filename:"buildTables.ml"
           ~message:"Module tables not implemented")
+    | Class _ ->
+      raise (Errors.internal_error
+        ~filename:"buildTables.ml"
+        ~message:"Class tables not implemented")
 
   let bindings fs = List.iter (binding fs)
 
@@ -236,12 +240,14 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | Alien { binder; _ } :: bs ->
-           let f = Var.var_of_binder binder in
+        | Alien { alien_binder; _ } :: bs ->
+           let f = Var.var_of_binder alien_binder in
            let fvs = IntSet.remove f fvs in
            o#close_cont fvs bs
         | Module _::_ ->
             assert false
+        | Class _::_ ->
+          assert false
 
     method! computation : Ir.computation -> ('self_type * Ir.computation * Types.datatype) =
       fun (bs, tc) ->

@@ -67,18 +67,6 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-let default_subkind : Subkind.t = (lin_unl, res_any)
-
-(* NOTICE: `lin_any` here means this eff_row_var can be unified with
-    linear or unlimited row types *)
-
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
-let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
-
-let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
-
-
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
@@ -265,6 +253,18 @@ module Pattern = struct
    [@@deriving show]
 end
 
+(*and subkind_class_method = {
+  method_name: Name.t;
+  method_type: datatype'; (* type signature of method *)
+}
+and subkind_class_instance = {
+  instance_class: Name.t;
+  instance_type: Name.t;
+  instance_methods: (Name.t * phrase) list; (* implementation of methods *)
+}*)
+  (* class_superclass: Name.t option; optional superclass, if none is provided cannot subkind to it *)
+  (*class_type_variable: Datatype.with_pos; type variable bound by class *)
+  (*class_methods: subkind_class_method list;*)
 module Alien: sig
   type 'a t [@@deriving show]
   type single [@@deriving show]
@@ -444,6 +444,7 @@ and valid_time_insertion =
 and temporal_insertion =
   | ValidTimeInsertion of valid_time_insertion
   | TransactionTimeInsertion
+(* Related to the expressions picked up by the parser *)
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -531,20 +532,22 @@ and phrasenode =
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
-                 datatype' option
-  | Fun     of function_definition
-  | Funs    of recursive_function list
-  | Foreign of Alien.single Alien.t
-  | Import of { pollute: bool; path : Name.t list }
-  | Open of Name.t list
-  | Aliases of alias list
-  | Infix   of { assoc: Associativity.t;
-                 precedence: int;
-                 name: string }
-  | Exp     of phrase
-  | Module  of { binder: Binder.with_pos; members: binding list }
-  | AlienBlock of Alien.multi Alien.t
+  | Val      of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
+                  datatype' option
+  | Fun      of function_definition
+  | Funs     of recursive_function list
+  | Foreign  of Alien.single Alien.t
+  | Import   of { pollute: bool; path : Name.t list }
+  | Open     of Name.t list
+  | Aliases  of alias list
+  | Infix    of { assoc: Associativity.t;
+                  precedence: int;
+                  name: string }
+  | Exp      of phrase
+  | Module   of module_definition
+  | AlienBlock  of Alien.multi Alien.t
+  | Class    of subkind_class_definition
+  | Instance of instance_definition
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -583,6 +586,20 @@ and recursive_functionnode = {
     rec_frozen : bool
   }
 and recursive_function = recursive_functionnode WithPos.t
+and module_definition = { 
+  module_binder: Binder.with_pos; 
+  module_members: binding list 
+}
+and subkind_class_definition = {
+  class_binder: Binder.with_pos;
+  class_name: Name.t;
+  class_type_variable: datatype';
+  class_signatures: (Name.t * datatype') list
+}
+and instance_definition = {
+  instance_binder: Binder.with_pos;
+  instance_methods: (Name.t * Types.datatype) list;
+}
   [@@deriving show]
 
 type directive = string * string list
@@ -658,6 +675,16 @@ struct
     | As (bndr, pat)        -> add (Binder.to_name bndr) (pattern pat)
     | HasType (pat, _)      -> pattern pat
 
+  let datatype (ty : Types.datatype) : StringSet.t =
+    match ty with
+    | Types.Not_typed -> empty
+    | Types.Var _ -> empty
+    | _ -> failwith "Not accounted for"
+
+  let datatype' (dt : datatype') : StringSet.t =
+    match dt with
+    | (_, Some ty) -> datatype ty
+    | (_, None) -> empty
 
   let rec formlet_bound (phrase : phrase) : StringSet.t = match WithPos.node phrase with
     | Xml (_, _, _, children) -> union_map formlet_bound children
@@ -851,13 +878,19 @@ struct
             (Alien.declarations alien)
         in
         bound_foreigns, empty
-    | Module { members; _ } ->
+    | Module { module_members; _ } ->
        List.fold_left
          (fun (bnd, fvs) b ->
            let bnd', fvs' = binding b in
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
-         (empty, empty) members
+         (empty, empty) module_members
+    | Class { class_binder; class_signatures; _ } ->
+       let class_name = Binder.to_name class_binder in
+       let bound_vars = singleton class_name in
+       let free_vars = union_map (fun (_, dt) -> datatype' dt) class_signatures in
+       bound_vars, free_vars
+
   and funlit (fn : funlit) : StringSet.t =
     match fn with
     | NormalFunlit n_fn -> normal_funlit n_fn

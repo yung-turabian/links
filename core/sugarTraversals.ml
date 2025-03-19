@@ -786,10 +786,20 @@ class map =
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module { binder; members } ->
-          let binder = o#binder binder in
-          let members = o#list (fun o -> o#binding) members in
-          Module { binder; members }
+      | Module { module_binder; module_members } ->
+          let module_binder = o#binder module_binder in
+          let module_members = o#list (fun o -> o#binding) module_members in
+          Module { module_binder; module_members }
+      | Class { class_binder; class_name; 
+                class_type_variable; class_signatures } ->          
+          let class_binder = o#binder class_binder in
+          let class_name = o#name class_name in
+          let class_type_variable = o#datatype' class_type_variable in
+          let class_signatures = o#list (fun o (name, dt) ->
+              let name = o#name name in
+              let dt = o#datatype' dt in
+              (name, dt)) class_signatures in
+          Class { class_binder; class_name; class_type_variable; class_signatures }
       | AlienBlock alien ->
          let declarations =
            o#list
@@ -1573,9 +1583,9 @@ class fold =
       | Infix { name; _ } ->
          o#name name
       | Exp _x -> let o = o#phrase _x in o
-      | Module { binder; members } ->
-          let o = o#binder binder in
-          o#list (fun o -> o#binding) members
+      | Module { module_binder; module_members } ->
+          let o = o#binder module_binder in
+          o#list (fun o -> o#binding) module_members
       | AlienBlock alien ->
          let o = o#foreign_language (Alien.language alien) in
          o#list
@@ -1583,7 +1593,9 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
-
+      | Class { class_binder; _ } ->
+          let o = o#binder class_binder in
+          o
     method binding : binding -> 'self_type =
       WithPos.traverse
         ~o
@@ -2518,10 +2530,23 @@ class fold_map =
          let (o, name) = o#name name in
          (o, Infix { name; assoc; precedence })
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module { binder; members } ->
-          let (o, binder) = o#binder binder in
-          let (o, members) = o#list (fun o -> o#binding) members in
-          (o, (Module { binder; members }))
+      | Module { module_binder; module_members } ->
+          let (o, module_binder) = o#binder module_binder in
+          let (o, module_members) = o#list (fun o -> o#binding) module_members in
+          (o, (Module { module_binder; module_members }))
+      | Class { class_binder; class_name; class_type_variable; class_signatures } ->
+        let (o, class_binder) = o#binder class_binder in
+        let (o, class_name) = o#name class_name in
+        let (o, class_type_variable) = o#datatype' class_type_variable in
+        let (o, class_signatures) =
+          o#list
+            (fun o (name, dt) ->
+              let (o, name) = o#name name in
+              let (o, dt) = o#datatype' dt in
+              (o, (name, dt)))
+            class_signatures
+        in
+        (o, Class { class_binder; class_name; class_type_variable; class_signatures })
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
          let o, declarations =

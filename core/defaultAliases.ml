@@ -7,7 +7,7 @@ let alias_env : Types.tycon_environment =
   (* TableHandle is now an alias of TemporalTable, so set it up *)
   let mk_arg () =
       let open Types in
-      let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
+      let kind = (PrimaryKind.Type, default_subkind) in
       let (q, (_, ty)) = fresh_quantifier kind in
       (q, ty)
   in

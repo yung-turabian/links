@@ -89,12 +89,6 @@ let concrete_subkind ?(is_effect=false) =
   | Some subkind -> subkind
   | None         -> if is_effect then default_effect_subkind else default_subkind
 
-
-let default_kind : PrimaryKind.t = PrimaryKind.Type
-let default_subkind : Subkind.t = (lin_unl, res_any)
-
-
-
 let is_anonymous_name name =
   name.[0] = '$'
 

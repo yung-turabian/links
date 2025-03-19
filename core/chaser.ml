@@ -47,15 +47,15 @@ object(self)
            self
          with
            _ -> self#add_import_candidate lookup_ref)
-    | Module { binder; members } ->
-        let name = Binder.to_name binder in
+    | Module { module_binder; module_members } ->
+        let name = Binder.to_name module_binder in
         let new_path = path @ [name] in
         let fqn = lst_to_path new_path in
         let o = self#bind_shadow name fqn in
         let shadow_ht = o#get_shadow_table in
         (* Now, recursively check the module, with this one in scope *)
         let o_bindings =
-          List.fold_left (fun o b -> o#binding b) (find_module_refs mt new_path shadow_ht) members in
+          List.fold_left (fun o b -> o#binding b) (find_module_refs mt new_path shadow_ht) module_members in
         let ics = o_bindings#get_import_candidates in
         (o#bind_open name fqn)#add_import_candidates ics
     | bn -> super#bindingnode bn
@@ -73,9 +73,9 @@ let rec add_module_bindings deps dep_map =
     | [""]::ys -> add_module_bindings ys dep_map
     | [name]::ys ->
       (try
-         let (members, _) = StringMap.find name dep_map in
-         let binder = SourceCode.WithPos.make (Binder.make ~name ()) in
-        WithPos.make (Module { binder; members }) :: (add_module_bindings ys dep_map)
+         let (module_members, _) = StringMap.find name dep_map in
+         let module_binder = SourceCode.WithPos.make (Binder.make ~name ()) in
+        WithPos.make (Module { module_binder; module_members }) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (raise (Errors.internal_error ~filename:"chaser.ml"
           ~message:(Printf.sprintf "Could not find %s in dependency map containing keys: %s\n"

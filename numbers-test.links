@@ -1,0 +1,7 @@
+open import Numbers;
+
+
+var zero = 0 : Nat;
+var one = 1 : Nat;
+
+addNat(zero, one)

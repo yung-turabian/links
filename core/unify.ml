@@ -462,7 +462,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 if var_is_free_in_type var t2 then
                   begin
                     Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-                    if Restriction.is_base rest then
+                    if rest ="Base" then
                       raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                               " with the body "^ string_of_datatype t2)));
                     rec_intro kind rpoint (var, Types.concrete_type t2);
@@ -481,7 +481,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 if var_is_free_in_type var t1 then
                   begin
                     Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
-                    if Restriction.is_base rest then
+                    if rest = "Base" then
                       raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                               " with the body "^ string_of_datatype t1)));
                     rec_intro kind lpoint (var, Types.concrete_type t1);
@@ -570,7 +570,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 Debug.if_set
                   (show_recursion)
                   (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
-                if Restriction.is_base rest then
+                if rest = "Base" then
                   raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                           " with the body "^ string_of_datatype t)));
                 let point' = Unionfind.fresh t in
@@ -920,7 +920,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
       | Closed ->
          raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
       | Var (_, (_, (_, rest')), `Flexible) ->
-         if Restriction.is_any rest && Restriction.is_base rest' then
+         if rest = "Any" && rest' = "Base" then
            raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
          Unionfind.change point' (Var (var, (PrimaryKind.Row, (lin, rest)), `Rigid))
       | Var (var', _, `Rigid) when var=var' -> ()
@@ -949,7 +949,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
          if not (StringMap.is_empty extension_field_env) &&
               TypeVarSet.mem var (free_row_type_vars (Row extension_row)) then
            begin
-             if Restriction.is_base rest then
+             if rest = "Base" then
                raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
                                        " with the body "^ string_of_row (Row extension_row))));
              rec_row_intro point (var, kind, Row extension_row)
