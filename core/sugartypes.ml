@@ -67,20 +67,68 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-let default_subkind : Subkind.t = (lin_unl, res_any)
+(** Since kinds are now deferred as bounded polymorphic objects because of subkind classes, they can't be guarenteed at parsing stage. 
 
-(* NOTICE: `lin_any` here means this eff_row_var can be unified with
-    linear or unlimited row types *)
+  - Linearity can be expected, however, restrictions are more involved with the subkind process so will take in as a constructor.
+  - In case of ::(Any, Base), we can subkind to Base but only linearity is know at parsing time.
+*)
+module SugarKind = 
+struct
 
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
-let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
-
-let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
-
-
-type kind = PrimaryKind.t option * Subkind.t option
+  type t =
+  | KUnresolved of Name.t option * PrimaryKind.t option * Subkind.t option * (Linearity.t option * Restriction.t option)
+  | KResolved of PrimaryKind.t option * Subkind.t option
     [@@deriving show]
+
+
+  let mk_unresolved name pk sk (lin, res) =
+    KUnresolved (name, pk, sk, (lin, res))
+  
+  let mk_unresolved_none =
+    KUnresolved (None, None, None, (None, None))
+
+  let is_empty = function
+    | KUnresolved (None, None, None, (None, None)) -> true
+    | KUnresolved (_, _, _, _) -> false
+    | KResolved (None, None) -> true
+    | KResolved (_, _) -> false
+
+  let mk_resolved pk sk =
+    KResolved (pk, sk)
+
+
+  let get_unresolved_exn = function
+    | KUnresolved (name, pk, sk, (lin, res)) -> name, pk, sk, lin, res
+    | KResolved (_pk, _sk) ->
+       raise
+         (internal_error
+            "Requesting unresolved kind when
+             it has already been resolved")
+  
+  let get_unresolved_name_exn =
+    get_unresolved_exn ->- fst5
+
+  let get_unresolved_pk_exn =
+    get_unresolved_exn ->- snd5
+
+  let get_unresolved_sk_exn =
+    get_unresolved_exn ->- thd5
+
+  let get_resolved_exn = function
+    | KResolved (pk, sk) -> pk, sk
+    | KUnresolved _ ->
+       raise
+         (internal_error
+            "Requesting resolved kind before
+             it has been resolved")
+  
+  let get_resolved_pk_exn =
+    get_resolved_exn ->- fst
+
+  let get_resolved_sk_exn =
+    get_resolved_exn ->- snd
+
+end
 
 module SugarTypeVar =
 struct
@@ -89,7 +137,7 @@ struct
    about its primary kind. This is filled in when resolving the variable *)
 (* FIXME: the above comment may well be false now - check *)
 type t =
-  | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
+  | TUnresolved       of Name.t * (bool * SugarKind.t) * Freedom.t
                                   (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
   | TResolvedRow      of Types.meta_type_var
@@ -148,7 +196,7 @@ module SugarQuantifier =
 struct
 
   type t =
-    | QUnresolved of Name.t * kind * Freedom.t
+    | QUnresolved of Name.t * SugarKind.t * Freedom.t
     | QResolved of Quantifier.t
       [@@deriving show]
 
@@ -388,6 +436,7 @@ and funlit = NormalFunlit of normal_funlit | SwitchFunlit of switch_funlit
 and switch_funlit = Pattern.with_pos list list * switch_funlit_body
 and switch_funlit_body = (Pattern.with_pos * phrase) list
 and normal_funlit = Pattern.with_pos list list * phrase
+and classlit = (Name.t * datatype') list
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -444,6 +493,7 @@ and valid_time_insertion =
 and temporal_insertion =
   | ValidTimeInsertion of valid_time_insertion
   | TransactionTimeInsertion
+(* Related to the expressions picked up by the parser *)
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -531,20 +581,22 @@ and phrasenode =
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
-                 datatype' option
-  | Fun     of function_definition
-  | Funs    of recursive_function list
-  | Foreign of Alien.single Alien.t
-  | Import of { pollute: bool; path : Name.t list }
-  | Open of Name.t list
-  | Aliases of alias list
-  | Infix   of { assoc: Associativity.t;
-                 precedence: int;
-                 name: string }
-  | Exp     of phrase
-  | Module  of { binder: Binder.with_pos; members: binding list }
-  | AlienBlock of Alien.multi Alien.t
+  | Val      of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
+                  datatype' option
+  | Fun      of function_definition
+  | Funs     of recursive_function list
+  | Foreign  of Alien.single Alien.t
+  | Import   of { pollute: bool; path : Name.t list }
+  | Open     of Name.t list
+  | Aliases  of alias list
+  | Infix    of { assoc: Associativity.t;
+                  precedence: int;
+                  name: string }
+  | Exp      of phrase
+  | Module   of module_definition
+  | AlienBlock  of Alien.multi Alien.t
+  | Class    of subkind_class_definition
+  (*| Instance of instance_definition*)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -583,6 +635,19 @@ and recursive_functionnode = {
     rec_frozen : bool
   }
 and recursive_function = recursive_functionnode WithPos.t
+and module_definition = { 
+  module_binder: Binder.with_pos; 
+  module_members: binding list 
+}
+and subkind_class_definition = {
+  class_binder: Binder.with_pos;
+  class_super_class: Name.t;
+  class_definition: SugarQuantifier.t list * classlit; (* Needs to be a list for more advance skclass *)
+}
+and instance_definition = {
+  instance_binder: Binder.with_pos;
+  instance_methods: (Name.t * Types.datatype) list;
+}
   [@@deriving show]
 
 type directive = string * string list
@@ -597,7 +662,7 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-exception ConcreteSyntaxError       of (Position.t * string)
+exception ConcreteSyntaxError of (Position.t * string)
 
 let tabstr : SugarQuantifier.t list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
@@ -608,7 +673,7 @@ let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
     | _  ->
-       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
+       let tv = SugarTypeVar.mk_unresolved "$none" (SugarKind.mk_unresolved_none) `Rigid in
        let make_arg ty =
          (Datatype.Type
             (WithPos.make (Datatype.TypeVar tv)),
@@ -620,7 +685,7 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> WithPos.node e
     | _  ->
-       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
+       let tv = SugarTypeVar.mk_unresolved "$none" (SugarKind.mk_unresolved_none) `Rigid in
        let make_arg ty =
          Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
@@ -826,6 +891,9 @@ struct
             (WithPos.nodes_of_list funs)
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
+    | Class { class_binder = bndr; class_definition = (_, clss); _} ->
+      let name = singleton (Binder.to_name bndr) in
+      name, (diff (classlit clss) name)
     | Import _
     | Open _
     | Aliases _ -> empty, empty
@@ -851,13 +919,14 @@ struct
             (Alien.declarations alien)
         in
         bound_foreigns, empty
-    | Module { members; _ } ->
+    | Module { module_members; _ } ->
        List.fold_left
          (fun (bnd, fvs) b ->
            let bnd', fvs' = binding b in
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
-         (empty, empty) members
+         (empty, empty) module_members
+
   and funlit (fn : funlit) : StringSet.t =
     match fn with
     | NormalFunlit n_fn -> normal_funlit n_fn
@@ -868,6 +937,12 @@ struct
     diff (switch_funlit_body body) (union_map (union_map pattern) args)
   and switch_funlit_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
     union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
+  and classlit (clss : classlit) : StringSet.t =
+    List.fold_left (fun acc (name, _dt) ->
+      let name_set = StringSet.singleton (name) in
+      let dt_set = StringSet.empty in
+      StringSet.union acc (StringSet.union name_set dt_set)
+    ) StringSet.empty clss
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

@@ -219,13 +219,13 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
 
         "withtype",
         ((fun context args ->
-          let tenv, aliases =
+          let tenv, aliases, subkinds =
             let tyenv = Context.typing_environment context in
-            tyenv.Types.var_env, tyenv.Types.tycon_env
+            tyenv.Types.var_env, tyenv.Types.tycon_env, tyenv.Types.subkind_env
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
-          | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read ~aliases ~subkinds (String.concat " " args) in
                  StringSet.iter
                    (fun id ->
                      try begin

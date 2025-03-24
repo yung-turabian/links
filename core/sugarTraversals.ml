@@ -76,21 +76,19 @@ class map =
       | Project _x -> let _x = o#name _x in Project _x
       | Name _x -> let _x = o#name _x in Name _x
 
-    method subkind : Subkind.t -> Subkind.t = fun x -> x
-
-    method kind : kind -> kind = fun x -> x
+    method kind : SugarKind.t -> SugarKind.t = fun x -> x
 
     method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let name' = o#name name in
            let is_eff' = o#bool is_eff in
-           let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let kind' = o#kind kind in
            let freedom' = o#freedom freedom in
-           TUnresolved (name', (is_eff', subkind_opt'), freedom')
+           TUnresolved (name', (is_eff', kind'), freedom')
         | v -> o#unknown v
 
 
@@ -628,6 +626,14 @@ class map =
                 let p = o#pattern p in
                 let c = o#phrase c in (p, c)) body in
             SwitchFunlit (pat, body)
+    
+    method classlit : classlit -> classlit =
+      fun clss ->
+        o#list (fun o (name, dt) ->
+          let name = o#name name in
+          let dt = o#datatype' dt in
+          (name, dt)
+        ) clss
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -783,13 +789,14 @@ class map =
       | Aliases ts ->
           let _x = o#list (fun o -> o#alias) ts in
           Aliases _x
+      | Class c -> Class (o#subkind_class_definition c)
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module { binder; members } ->
-          let binder = o#binder binder in
-          let members = o#list (fun o -> o#binding) members in
-          Module { binder; members }
+      | Module { module_binder; module_members } ->
+          let module_binder = o#binder module_binder in
+          let module_members = o#list (fun o -> o#binding) module_members in
+          Module { module_binder; module_members }
       | AlienBlock alien ->
          let declarations =
            o#list
@@ -822,6 +829,27 @@ class map =
     method alias : alias -> alias =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#aliasnode p
+
+    method subkind_class_definition : subkind_class_definition -> subkind_class_definition 
+      = fun { class_binder;
+              class_super_class;
+              class_definition = (tyvar, lit); } ->
+      let class_binder = o#binder class_binder in
+      let tyvar = o#list (fun o -> o#quantifier) tyvar in
+      let lit = o#classlit lit in
+      let class_super_class = o#name class_super_class in
+      (*let class_signatures = o#list (fun o signature ->
+        WithPos.map2
+          ~f_pos:(fun v -> o#position v)
+          ~f_node:(fun (name, dt) ->
+            let name = o#name name in
+            let dt = o#datatype' dt in
+            (name, dt))
+          signature
+      ) class_signatures in*)
+      { class_binder;
+        class_super_class;
+        class_definition = (tyvar, lit); }
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -944,19 +972,17 @@ class fold =
       | Project _x -> let o = o#name _x in o
       | Name _x -> let o = o#name _x in o
 
-    method subkind : Subkind.t -> 'self_type = fun _ -> o
-
-    method kind : kind -> 'self_type = fun _ -> o
+    method kind : SugarKind.t -> 'self_type = fun _ -> o
 
     method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : SugarTypeVar.t -> 'self_type =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let o = o#name name in
            let o = o#bool is_eff in
-           let o = o#option (fun o -> o#subkind) subkind_opt in
+           let o = o#kind kind in
            let o = o#freedom freedom in
            o
         | v -> o#unknown v
@@ -1424,6 +1450,15 @@ class fold =
               let o = o#pattern p in
               let o = o#phrase c in o) body in
             o
+    
+    method classlit : classlit -> 'self_type =
+      fun clss ->
+        o#list (fun o (name, dt) ->
+          let o = o#name name in
+          let o = o#datatype' dt in
+          o
+        ) clss
+  
 
 
     method handle_params : handler_parameterisation -> 'self_type =
@@ -1573,9 +1608,9 @@ class fold =
       | Infix { name; _ } ->
          o#name name
       | Exp _x -> let o = o#phrase _x in o
-      | Module { binder; members } ->
-          let o = o#binder binder in
-          o#list (fun o -> o#binding) members
+      | Module { module_binder; module_members } ->
+          let o = o#binder module_binder in
+          o#list (fun o -> o#binding) module_members
       | AlienBlock alien ->
          let o = o#foreign_language (Alien.language alien) in
          o#list
@@ -1583,7 +1618,7 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
-
+      | Class c -> o#subkind_class_definition c
     method binding : binding -> 'self_type =
       WithPos.traverse
         ~o
@@ -1611,6 +1646,27 @@ class fold =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#aliasnode v)
+
+    method subkind_class_definition : subkind_class_definition -> 'self
+      = fun { class_binder;
+              class_super_class;
+              class_definition = (tyvar, lit);
+            } ->
+          let o = o#binder class_binder in
+          let o = o#name class_super_class in 
+          let o = o#list (fun o -> o#quantifier) tyvar in
+          let o = o#classlit lit in
+          (*let o = o#list (fun o signature -> 
+            WithPos.traverse
+              ~o
+              ~f_pos:(fun o pos -> o#position pos)
+              ~f_node:(fun o (name, dt) ->
+            let o = o#name name in
+            let o = o#datatype' dt in 
+            o
+            ) signature
+           ) class_signatures in*)
+          o
 
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
@@ -1727,21 +1783,19 @@ class fold_map =
       | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
       | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method subkind : Subkind.t -> ('self_type * Subkind.t) = fun k -> (o, k)
-
-    method kind : kind -> ('self_type * kind) = fun k -> (o, k)
+    method kind : SugarKind.t -> ('self_type * SugarKind.t) = fun k -> (o, k)
 
     method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
+        | TUnresolved (name, (is_eff, kind), freedom) ->
            let o, name' = o#name name in
            let o, is_eff' = o#bool is_eff in
-           let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let o, kind' = o#kind kind in
            let o, freedom' = o#freedom freedom in
-           o, TUnresolved (name', (is_eff', subkind_opt'), freedom')
+           o, TUnresolved (name', (is_eff', kind'), freedom')
         | v -> o#unknown v
 
 
@@ -2330,6 +2384,16 @@ class fold_map =
                 (o, (p, c))) body in
             (o, SwitchFunlit (pat, body))
 
+    method classlit : classlit -> ('self_type * classlit) =
+      fun clss ->
+        let (o, clss) =
+          o#list (fun o (name, dt) ->
+            let (o, name) = o#name name in
+            let (o, dt) = o#datatype' dt in
+            (o, (name, dt))
+          ) clss in
+        (o, clss)
+
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun { shp_bindings; shp_types } ->
         let (o, shp_bindings) =
@@ -2518,10 +2582,11 @@ class fold_map =
          let (o, name) = o#name name in
          (o, Infix { name; assoc; precedence })
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module { binder; members } ->
-          let (o, binder) = o#binder binder in
-          let (o, members) = o#list (fun o -> o#binding) members in
-          (o, (Module { binder; members }))
+      | Module { module_binder; module_members } ->
+          let (o, module_binder) = o#binder module_binder in
+          let (o, module_members) = o#list (fun o -> o#binding) module_members in
+          (o, (Module { module_binder; module_members }))
+      | Class c -> let o, c = o#subkind_class_definition c in o, Class c
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
          let o, declarations =
@@ -2562,6 +2627,29 @@ class fold_map =
       function
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
         | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
+
+    method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
+      = fun { class_binder;
+              class_super_class;
+              class_definition = (tyvar, lit);
+            } ->
+          let o, class_binder = o#binder class_binder in
+          let o, class_super_class = o#name class_super_class in 
+          let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
+          let o, lit = o#classlit lit in
+          (*let o, class_signatures = o#list (fun o signature -> 
+            WithPos.traverse_map
+              ~o
+              ~f_pos:(fun o v -> o#position v)
+              ~f_node:(fun o (name, dt) ->
+            let o, name = o#name name in
+            let o, dt = o#datatype' dt in 
+            (o, (name, dt))
+            ) signature
+           ) class_signatures in*)
+          (o, { class_binder;
+           class_super_class;
+           class_definition = (tyvar, lit)})
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

@@ -4,10 +4,10 @@ open CommonTypes
 module AliasEnv = Env.String
 
 let alias_env : Types.tycon_environment =
-  (* TableHandle is now an alias of TemporalTable, so set it up *)
+  (* NOTE TableHandle is now an alias of TemporalTable, so set it up *)
   let mk_arg () =
       let open Types in
-      let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
+      let kind = (PrimaryKind.Type, default_subkind) in
       let (q, (_, ty)) = fresh_quantifier kind in
       (q, ty)
   in
@@ -22,7 +22,7 @@ let alias_env : Types.tycon_environment =
     (fun env (name, t) ->
       AliasEnv.bind name t env)
     AliasEnv.empty
-    [ (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
+    [ (** {!DEPRECATED} "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
       "Xml"     , `Alias (pk_type, [], Types.Application (Types.list, [(PrimaryKind.Type, Types.Primitive Primitive.XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;

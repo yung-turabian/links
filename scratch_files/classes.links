@@ -1,0 +1,41 @@
+# Do not import directly, imported from Prelude.links
+# TODO Consider improving the `infix` to be able to take a list as a shorthand
+
+infix 4 ==;
+infix 4 <>;
+infix 4 <;
+infix 4 >;
+infix 4 <=;
+infix 4 >=;
+#infixr 3 &&;
+#infixr 2 ||;
+
+class Eq : a {
+		sig == : (a, a) -> Bool;
+		sig <> : (a, a) -> Bool;
+}
+
+class Ord : a::Eq {
+		sig <= : (a, a) -> Bool;
+		sig >= : (a, a) -> Bool;
+		sig max : (a, a) -> a;
+		sig min : (a, a) -> a;
+}
+
+
+instance Eq : Int {
+		(==) = int_eq;
+		(<>) = int_neq;
+}
+
+#class Monoid : a {
+#		
+#}
+
+#class Group : a {
+#
+#}
+
+#class Ring : a {
+#
+#}

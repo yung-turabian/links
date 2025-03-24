@@ -11,7 +11,7 @@
  * Desugars modules into plain binders.
  *
  * module Foo {
- *    val bobsleigh = ...;
+ *    var bobsleigh = ...;
  *    fun x() {
  *    }
  *
@@ -20,14 +20,14 @@
  *      }
  *    }
  * }
- * val x = ...;
+ * var x = ...;
  *
  *  --->
  *
- * val Foo_0$bobsleigh_0 = ...;
+ * var Foo_0$bobsleigh_0 = ...;
  * fun Foo_0$x1() { ...}
  * fun Foo_0$Bar_2$y_0() { ... }
- * val x1 = ...;
+ * var x1 = ...;
  *
  * The names are internal. The [Name.prettify] function in
  * [module_hacks.ml] attempts to recover the source representation of
@@ -243,10 +243,10 @@ end
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
   = fun ?(toplevel=false) renamer scope binding ->
   match binding.node with
-  | Module { binder; members } ->
-     let name = Binder.to_name binder in
+  | Module { module_binder; module_members } ->
+     let name = Binder.to_name module_binder in
      let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
-     let bs'    = visitor#bindings members in
+     let bs'    = visitor#bindings module_members in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
@@ -464,6 +464,35 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              ts' []
            in
            Aliases ts''
+      (*| Class cs ->
+        let cs' =
+          List.fold_left
+            (fun {node=(name, tyvar, dt); pos} cs ->
+              (self#subkind_binder name, tyvar, dt, pos) :: cs)
+              cs []
+        in
+        let cs'' =
+          List.fold_right
+            (fun (name, tyvar, dt, pos) cs ->
+              let dt' = self#aliasbody dt in
+              SourceCode.WithPos.make ~pos (name, tyvar, dt') :: cs)
+            cs' []
+        in
+        Class cs''*)
+      (*| Class { class_binder; class_name; class_type_variable; class_signatures } ->
+      let class_binder' = self#binder class_binder in
+      let class_type_variable' = self#datatype' class_type_variable in
+      let class_signatures' =
+        self#list
+          (fun o (name, dt) ->
+            let dt' = o#datatype' dt in
+            (name, dt'))
+          class_signatures
+      in
+      Class { class_binder = class_binder';
+              class_name;
+              class_type_variable = class_type_variable';
+              class_signatures = class_signatures' }*)
       | Val (pat, (tvs, body), loc, dt) ->
        (* It is important to process [body] before [pat] to avoid
           inadvertently bringing the binder(s) in [pat] into the

@@ -184,7 +184,9 @@ module Compressible = struct
       | #primitive_value_basis as v -> v
       | `Table (db_name, table_name, keys, temporality, temporal_fields, t) ->
          let row =
-           match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
+           match DesugarDatatypes.read 
+                  ~aliases:DefaultAliases.alias_env t
+                  ~subkinds:DefaultSubkindClasses.subkind_env with
            | Types.Record (Types.Row row) -> row
            | _ -> assert false in
          let driver, params = parse_db_string db_name in
@@ -493,6 +495,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
         let row_type =
           DesugarDatatypes.read
             ~aliases:E.String.empty
+            ~subkinds:E.String.empty
             (assoc_string "row" bs) in
         let row =
           begin

@@ -212,6 +212,27 @@ let renamer qs_from qs_to =
 
   end
 
+  (*let rename_class_definition : subkind_class_definition -> subkind_class_definition =
+    fun { class_binder
+        ; class_super_class
+        ; class_definition = (tyvars_from, c) } ->
+      let (ops, dts) = c in
+      let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
+      let qs_to, _ = Instantiate.build_fresh_quantifiers qs_from in
+      let tyvars_to = List.map SugarQuantifier.mk_resolved qs_to in
+      let o = renamer qs_from qs_to in
+      let typ' = o#forall (Binder.to_type class_binder) in
+      let _, ops' = List.split (List.map (o#pattern_list o) ops) in
+      let _, dts' = List.split (List.map (fun (name, dt) ->
+        let (o, name) = o#name name in
+        let (o, dt) = o#datatype' dt in
+        (o, (name, dt))
+      ) dts )in
+      { class_binder = Binder.set_type class_binder typ'
+      ; class_super_class
+      ; class_definition = (tyvars_to, ops', dts')
+      }
+*)
 let rename_function_definition : function_definition -> function_definition =
   fun { fun_binder
       ; fun_linearity

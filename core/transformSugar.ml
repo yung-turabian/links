@@ -29,15 +29,15 @@ let type_section env =
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
 
-let type_unary_op env tycon_env =
-  let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
+let type_unary_op env tycon_env subkind_env =
+  let datatype = DesugarDatatypes.read ~aliases:tycon_env ~subkinds:subkind_env in function
     | UnaryOp.Minus      -> datatype "(Int) -> Int"
     | UnaryOp.FloatMinus -> datatype "(Float) -> Float"
     | UnaryOp.Name n     -> TyEnv.find n env
 
-let type_binary_op env tycon_env =
+let type_binary_op env tycon_env subkind_env =
   let open BinaryOp in
-  let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
+  let datatype = DesugarDatatypes.read ~aliases:tycon_env ~subkinds:subkind_env in function
   | Minus        -> TyEnv.find "-" env
   | FloatMinus   -> TyEnv.find "-." env
   | RegexMatch flags ->
@@ -146,6 +146,7 @@ class transform (env : Types.typing_environment) =
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
+    val subkind_env = env.Types.subkind_env
     val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
@@ -199,11 +200,11 @@ class transform (env : Types.typing_environment) =
 
     method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t * Types.datatype) =
       fun op ->
-        (o, op, type_unary_op var_env tycon_env op)
+        (o, op, type_unary_op var_env tycon_env subkind_env op)
 
     method binop : BinaryOp.t -> ('self_type * BinaryOp.t * Types.datatype) =
       fun op ->
-        (o, op, type_binary_op var_env tycon_env op)
+        (o, op, type_binary_op var_env tycon_env subkind_env op)
 
     method section : Section.t -> ('self_type * Section.t * Types.datatype) =
       fun section ->
@@ -905,10 +906,11 @@ class transform (env : Types.typing_environment) =
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
-      | AlienBlock _ -> assert false
-      | Module _ -> assert false
-      | Import _ -> assert false
-      | Open _ -> assert false
+      | AlienBlock _
+      | Module _
+      | Import _
+      | Open _
+      | Class _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map

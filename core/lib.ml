@@ -16,6 +16,11 @@ let runtime_type_error error =
      "This should not happen if the type system / checker is correct. " ^
      "Please file a bug report.")
 
+(* Subkind (Class) environment *)
+module SignatureEnv = Env.String
+
+let subkind_env : Types.subkind_environment = DefaultSubkindClasses.subkind_env
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -24,12 +29,12 @@ module AliasEnv = Env.String
 let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
-  AliasEnv.bind "Repeat" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Repeat.datatype))) alias_env
+  AliasEnv.bind "Repeat" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env Linksregex.Repeat.datatype))) alias_env
 
 let alias_env : Types.tycon_environment =
-  AliasEnv.bind "Regex" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
+  AliasEnv.bind "Regex" (`Alias (pk_type, [], (DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env Linksregex.Regex.datatype))) alias_env
 
-let datatype = DesugarDatatypes.read ~aliases:alias_env
+let datatype = DesugarDatatypes.read ~aliases:alias_env ~subkinds:subkind_env
 
 type primitive =
 [ Value.t
@@ -1527,6 +1532,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
+    
+
+    (* TODO this could be bootstrapped instead *)
 
     (* LINKS GAME LIBRARY *)
 
@@ -1792,6 +1800,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
+                  subkind_env = subkind_env;
                   Types.effect_row = Types.closed_wild_row;
                   Types.cont_lin = -1;
                   Types.desugared = false }

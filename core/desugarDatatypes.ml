@@ -569,9 +569,9 @@ let sentence typing_env = function
       Expression p
   | Directive   d  -> Directive d
 
-let read ~aliases s =
+let read ~aliases ~subkinds s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
-  let dt = DesugarTypeVariables.standalone_signature dt in
+  let dt = DesugarTypeVariables.standalone_signature subkinds dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in
   ty

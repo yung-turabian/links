@@ -136,6 +136,10 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> Binder.with_pos -> binding list
      -> binding
 
+  val class_binding
+      : ?ppos:t -> Binder.with_pos -> ?super_class:Name.t -> SugarQuantifier.t list -> classlit
+     -> binding
+
   (* Database queries *)
   val db_exps
       : ?ppos:t -> (Name.t * phrase) list -> phrase
