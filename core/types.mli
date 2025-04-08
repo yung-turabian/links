@@ -197,6 +197,19 @@ module type Constraint = sig
   val make_row : row -> unit
 end
 
+module ConstraintRegistry : sig
+  (** A registry for managing constraint modules *)
+  
+  (** The type of constraint modules *)
+  type constraint_module = (module Constraint)
+  
+  (** Register a new constraint with the given name *)
+  val register : string -> constraint_module -> unit
+
+  (** Retrieve a constraint by name *)
+  val get_restriction_constraint : string -> constraint_module option
+end
+
 module Base : Constraint
 module Unl : Constraint
 module Session : Constraint
@@ -204,6 +217,15 @@ module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
 val get_restriction_constraint : Restriction.t -> (module Constraint) option
+
+val create_constraint :
+  (typ -> bool) ->
+  (row -> bool) ->
+  (typ -> bool) ->
+  (row -> bool) ->
+  (typ -> unit) ->
+  (row -> unit) ->
+  (module Constraint)
 
 val dual_row : row -> row
 val dual_type : datatype -> datatype
@@ -214,16 +236,23 @@ type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
-]
+] [@@deriving show]
 
-type environment        = datatype Env.String.t
-type tycon_environment  = tycon_spec Env.String.t
-type typing_environment = { var_env    : environment ;
-                            rec_vars   : Utility.StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_row : row ;
-                            cont_lin   : int ;
-                            desugared  : bool }
+type subkind_spec = [
+  | `Decl of Kind.t 
+  | `Class of (Kind.t * Quantifier.t list * Name.t list)
+] [@@deriving show]
+
+type environment         = datatype Env.String.t
+type tycon_environment   = tycon_spec Env.String.t
+type subkind_environment = subkind_spec Env.String.t
+type typing_environment  = { var_env     : environment ;
+                             rec_vars    : Utility.StringSet.t ;
+                             tycon_env   : tycon_environment ;
+                             subkind_env : subkind_environment ;
+                             effect_row  : row ;
+                             cont_lin    : int ;
+                             desugared   : bool }
 
 val empty_typing_environment : typing_environment
 

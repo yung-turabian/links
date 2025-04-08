@@ -1,0 +1,31 @@
+
+# Shouldn't be allowed, a class can only have one PK
+#class Dummy : (a::Base, b::Eff) {
+#		sig test : (a) -> String;
+#}
+
+
+class Eq : (a::Base) {
+		sig == : (a,a) -> Bool;
+}
+
+fun showBool(b) {
+		switch(b) {
+				case true -> "true"
+				case false -> "false"
+		}
+}
+
+op x `boolEq` y {
+		switch ((x, y)) {
+				case (true, true) -> true
+				case (false, false) -> true
+				case other -> false
+		}	
+}
+
+instance Eq : Bool {
+		x == y : x `boolEq` y;
+}
+
+true == true

@@ -209,6 +209,8 @@ sig
 
   val alien : var_info * string * ForeignLanguage.t * (var -> tail_computation sem) -> tail_computation sem
 
+  (*val class_method : var_info * Kind.t * (var -> tail_computation sem) -> tail_computation sem*)
+
   val select : Name.t * value sem -> tail_computation sem
 
   val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
@@ -299,6 +301,8 @@ struct
 
     val alien_binding : var_info * string * ForeignLanguage.t -> var M.sem
 
+    (*val class_method_binding : var_info * Kind.t -> var M.sem*)
+
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
   struct
@@ -353,7 +357,11 @@ struct
 
     let alien_binding (x_info, object_name, language) =
       let xb, x = Var.fresh_var x_info in
-      lift_binding (Alien { binder = xb; object_name; language }) x
+      lift_binding (Alien { alien_binder = xb; object_name; language }) x
+
+    (*let class_method_binding (x_info, kind) =
+      let xb, x = Var.fresh_var x_info in
+      lift_binding (ClassMethod { method_binder = xb; kind }) x*)
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -570,6 +578,9 @@ struct
 
   let alien (x_info, object_name, language, rest) =
     M.bind (alien_binding (x_info, object_name, language)) rest
+
+  (*let class_method (x_info, kind, rest) =
+    M.bind (class_method_binding (x_info, kind)) rest*)
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
@@ -903,10 +914,15 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "!"), e1, e2) ->
               I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
+
+              
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
+
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
+
+
           | InfixAppl ((tyargs, BinaryOp.Cons), e1, e2) ->
               cofv (I.apply_pure (instantiate "Cons" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.FloatMinus), e1, e2) ->
@@ -920,8 +936,12 @@ struct
               I.condition (ev e1, ec e2, cofv (I.constant (Constant.Bool false)))
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
+
+
           | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
+
+
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
@@ -1337,9 +1357,65 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                (*| ClassMethod method' ->
+                  let open Sugartypes in
+                  
+                  let binder =
+                    fst (ClassMethod.method' method')
+                  in
+                  assert (Binder.has_type binder);
+                  let x  = Binder.to_name binder in
+                  let xt = Binder.to_type binder in
+                  let x_info = Var.make_info xt x scope in
+                  let kind =
+                    (ClassMethod.kind method') 
+                  in
+                  let tyvars =
+                    (ClassMethod.qs method')
+                  in
+                  let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
+                  let body = (ClassMethod.body method') 
+                  in
+                  let eval : ClassMethod.phrase option -> tail_computation I.sem = function
+                    | Some { node; _} -> (
+                      match node with
+                      | Constant c -> I.comp_of_value (I.constant c)
+                      | _ -> failwith "Unexpected phrasenode variant in method body"
+                    )
+                    | None -> failwith "No body within method"
+                  in
+                  let body = eval body in
+                  (*let k = SugarKind.get_resolved_exn kind in*)
+                  (* TODO: Move this logic somewhere earlier, we want kinds to be discovered
+                in desugarTypevariables.ml *)
+                  (*(match k with
+                  | Some pk, Some sk ->
+                    I.class_method (Var.make_info xt x scope, (pk, sk),
+                            fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                  | _ -> failwith "kind not found")*)
+                (* TODO: Working here to set class method to a variable, i.e. the operator. 
+                   We should pass quantifiers to this point as they contain kinding I suppose. 
+                   Is this the best approach? 
+                   
+                   So far it makes the most sense as we are taking a 
+                   
+                   block structure and breaking it down to single points that have a relation kinding
+                   and allow for ad hoc polymorphism by making pointed calls to lib.ml, where in OCaml
+                   we have a switch statement for operators. *)
+
+                  
+                  I.letvar 
+                    (x_info,
+                      ec body, (** Either an internal function, program or if I get to it an inline function def. *)
+                      qs,
+                        fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e
+                    )*)
                 | Aliases _
+                | Class _
+                | Instance _
+                (*| ClassMethod _*)
                 | Infix _ ->
-                    (* Ignore type alias and infix declarations - they
+                    (* Ignore type alias, infix declarations and class/instances - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Import _ | Open _ | Fun _
@@ -1400,11 +1476,16 @@ struct
                    | Scope.Local ->
                       partition (globals, b::locals, nenv) bs
                  end
-              | Alien { binder; _ }
-                   when Var.Scope.is_global (Var.scope_of_binder binder) ->
-                 let f = Var.var_of_binder binder in
-                 let f_name = Var.name_of_binder binder in
+              | Alien { alien_binder; _ }
+                   when Var.Scope.is_global (Var.scope_of_binder alien_binder) ->
+                 let f = Var.var_of_binder alien_binder in
+                 let f_name = Var.name_of_binder alien_binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
+              (*| ClassMethod { method_binder; _ }
+                 when Var.Scope.is_global (Var.scope_of_binder method_binder) ->
+               let f = Var.var_of_binder method_binder in
+               let f_name = Var.name_of_binder method_binder in
+               partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs*)
               | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in

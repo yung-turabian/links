@@ -1,0 +1,35 @@
+alien javascript "/lib/carmak.js" {
+
+# Values, could better define as val : Type;, but need to figure out
+# how to pass variabled from JS to here
+color_buffer_bit : () -> Int;
+
+# Functions
+clearColor : forall e::Row . (Float, Float, Float, Float) ~e~> ();
+clear : forall e::Row . (Int) ~e~> ();
+
+}
+
+sig eqInt : (Int, Int) -> Bool
+fun eqInt(f, g) {
+		if (f == g)
+				true
+		else
+				false
+} 
+
+
+infixr 9 <+>;
+sig <+> : (Int, Int) -> Bool 
+op f <+> g {
+  eqInt(f, g)
+}
+
+sig test : (a::Base) -> a
+fun test(x) {
+		x
+}
+
+test(2)
+
+# 2 <+> 3

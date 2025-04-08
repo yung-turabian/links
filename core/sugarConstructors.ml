@@ -28,7 +28,7 @@ module SugarConstructors (Position : Pos)
   let fresh_type_variable freedom : SugarTypeVar.t =
     incr type_variable_counter;
     let name = "_" ^ string_of_int (!type_variable_counter) in
-    SugarTypeVar.mk_unresolved name None freedom
+    SugarTypeVar.mk_unresolved name (SugarKind.mk_unresolved_none) freedom
 
   (** Helper data types and functions for passing arguments to smart
       constructors. *)
@@ -204,8 +204,27 @@ module SugarConstructors (Position : Pos)
     val_binding' ~ppos None (Pat pat, phrase, loc_unknown)
 
   (* Create a module binding. *)
-  let module_binding ?(ppos=dp) binder members =
-    with_pos ppos (Module { binder; members })
+  let module_binding ?(ppos=dp) bndr members =
+    with_pos ppos (Module { 
+                            module_binder = bndr; 
+                            module_members = members
+                          })
+
+  (* Create a subkind class binding. *)
+  let class_binding ?(ppos=dp) bndr tyvars methods =
+    with_pos ppos (Class { 
+                            class_binder = bndr; 
+                            class_tyvar = tyvars;
+                            class_methods = methods
+                         })
+
+  (* Create a subkind class instance. *)
+  let instance_binding ?(ppos=dp) bndr typ methods =
+    with_pos ppos (Instance { 
+                            instance_binder = bndr; 
+                            instance_type = typ;
+                            instance_methods = methods
+                          })
 
   let type_abstraction ?(ppos=dp) tyvars phrase =
     with_pos ppos (TAbstr (tyvars, phrase))

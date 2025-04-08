@@ -1,0 +1,68 @@
+
+# TODO
+# 1. Configure the subkind logic to accept at runtime declared subkinds, the first step and a major breakthrough
+# 1a. This will be similar to creating a new variable I presume, adding it to the global environment.
+# 2. Figure out a way where subkinding, at runtime, could be improved/even work; this may 
+# involve considering the operation wanting to be performed on a type variable.
+# 3. Perfect the syntax
+
+#alien builtin {
+#  +      : (Int, Int) -> Int = "%int_plus"   [directstyle];
+#}
+
+sig addInt : (Int, Int) -> Int
+fun addInt(x, y) {
+		x + y
+}
+
+#infixl 6 +;
+#sig <+> : (Float, Float) -> Float 
+#op x <+> y {
+#		x +. y
+#}
+
+#2.2 <+> 2.3
+
+infix 4 ==;
+infix 4 <>;
+
+
+class Eq : a {
+		sig == : (a, a) -> Bool;
+		sig <> : (a, a) -> Bool;
+}
+
+infix 4 <;
+infix 4 >;
+infix 4 <=;
+infix 4 >=;
+
+class Ord <: Eq : a {
+		sig <= : (a, a) -> Bool;
+		sig >= : (a, a) -> Bool;
+		sig max : (a, a) -> a;
+		sig min : (a, a) -> a;
+}
+
+infixl 6 +;
+infixl 6 -;
+infixl 7 *;
+
+class Numeric <: Eq : a {
+		sig + : (a, a) -> a;
+		sig * : (a, a) -> a;
+		sig - : (a, a) -> a;
+		sig / : (a, a) -> a;
+}
+
+#instance Numeric : Int {
+#		fun + : (x, y) {
+#				addInt(x, y)
+#		}
+#} 
+
+#<: Base : a {
+#		(+) :: (a, a) -> a;
+#}
+
+#class Numeric <: Type : a {}

@@ -1,0 +1,67 @@
+# Do not import directly, imported from Prelude.links
+# TODO Consider improving the `infix` to be able to take a list as a shorthand
+
+class Base;
+
+infix 4 ==;
+infix 4 <>;
+#infixr 3 &&;
+#infixr 2 ||;
+
+# class Eq : (a::Type)
+class Eq : (a) {
+		sig == : (a, a) -> Bool;
+		sig <> : (a, a) -> Bool;
+}
+
+infix 4 <;
+infix 4 >;
+infix 4 <=;
+infix 4 >=;
+
+class Ord : (a::Eq) {
+		sig <= : (a, a) -> Bool;
+		sig >= : (a, a) -> Bool;
+		sig maximum : (a, a) -> a;
+		sig minumum : (a, a) -> a;
+}
+
+fun minimum(a,b) {
+  if (a < b) { a }
+  else { b }
+}
+
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+instance Ord : Int {
+		maximum : maximum
+}
+
+#instance Ord : Int {
+#
+#}
+
+# Desugared to, e.g. sig <= : (Ord, Ord) -> Bool;
+# added to the dictionary structure to be written before the instance function
+
+
+
+#instance Eq : Int {
+#		(==) = int_eq;
+#		(<>) = int_neq;
+#}
+
+#class Monoid : a {
+#		
+#}
+
+#class Group : a {
+#
+#}
+
+#class Ring : a {
+#
+#}

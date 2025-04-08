@@ -67,20 +67,67 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-let default_subkind : Subkind.t = (lin_unl, res_any)
+(** Since kinds are now deferred as bounded polymorphic objects because of subkind classes, they can't be guarenteed at parsing stage. 
 
-(* NOTICE: `lin_any` here means this eff_row_var can be unified with
-    linear or unlimited row types *)
+  - Linearity can be expected, however, restrictions are more involved with the subkind process so will take in as a constructor.
+  - In case of ::(Any, Base), we can subkind to Base but only linearity is know at parsing time.
+*)
+module SugarKind = 
+struct
 
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
-let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
-
-let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
-
-
-type kind = PrimaryKind.t option * Subkind.t option
+  type t =
+  | KUnresolved of PrimaryKind.t option * (Linearity.t option * Restriction.t option)
+  | KResolved of PrimaryKind.t option * Subkind.t option
     [@@deriving show]
+
+
+  let mk_unresolved pk (lin, res) =
+    KUnresolved (pk, (lin, res))
+  
+  let mk_unresolved_none =
+    KUnresolved (None, (None, None))
+
+  let is_empty = function
+    | KUnresolved (None, (None, None)) -> true
+    | KUnresolved (_, _) -> false
+    | KResolved (None, None) -> true
+    | KResolved (_, _) -> false
+
+  let mk_resolved pk sk =
+    KResolved (pk, sk)
+
+
+  let get_unresolved_exn = function
+    | KUnresolved (pk, (lin, res)) -> pk, lin, res
+    | KResolved (_pk, _sk) ->
+       raise
+         (internal_error
+            "Requesting unresolved kind when
+             it has already been resolved")
+  
+  let get_unresolved_pk_exn =
+    get_unresolved_exn ->- fst3
+
+  let get_unresolved_sk_exn =
+    fun exn -> 
+      match get_unresolved_exn exn with
+      | (_, snd, thd) -> snd, thd
+
+  let get_resolved_exn = function
+    | KResolved (pk, sk) -> pk, sk
+    | KUnresolved _ ->
+       raise
+         (internal_error
+            "Requesting resolved kind before
+             it has been resolved")
+  
+  let get_resolved_pk_exn =
+    get_resolved_exn ->- fst
+
+  let get_resolved_sk_exn =
+    get_resolved_exn ->- snd
+
+end
 
 module SugarTypeVar =
 struct
@@ -89,7 +136,7 @@ struct
    about its primary kind. This is filled in when resolving the variable *)
 (* FIXME: the above comment may well be false now - check *)
 type t =
-  | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
+  | TUnresolved       of Name.t * (bool * SugarKind.t) * Freedom.t
                                   (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
   | TResolvedRow      of Types.meta_type_var
@@ -148,7 +195,7 @@ module SugarQuantifier =
 struct
 
   type t =
-    | QUnresolved of Name.t * kind * Freedom.t
+    | QUnresolved of Name.t * SugarKind.t * Freedom.t
     | QResolved of Quantifier.t
       [@@deriving show]
 
@@ -171,6 +218,8 @@ struct
  let get_unresolved_name_exn =
    get_unresolved_exn ->- fst3
 
+ let get_unresolved_kind_exn =
+  get_unresolved_exn ->- snd3
 
   let get_resolved_exn = function
     | QResolved q -> q
@@ -264,6 +313,99 @@ module Pattern = struct
   and with_pos = t WithPos.t
    [@@deriving show]
 end
+
+(*module ClassMethod: sig
+  type 'a t
+  and single
+  and multi
+  and phrase 
+    [@@deriving show]
+
+  val methods : 'a t -> (Binder.with_pos * datatype') list
+  val method' : single t -> (Binder.with_pos * datatype')
+  val modify : ?methods:(Binder.with_pos * datatype') list -> ?kind:SugarKind.t -> ?qs:SugarQuantifier.t list -> ?body:phrase -> 'a t -> 'a t
+  val kind : 'a t -> SugarKind.t
+  val qs : 'a t -> SugarQuantifier.t list
+  val body : 'a t -> phrase option
+
+  val multi : SugarKind.t -> SugarQuantifier.t list -> phrase option -> (Binder.with_pos * datatype') list -> multi t
+  val single : SugarKind.t -> SugarQuantifier.t list -> phrase option -> Binder.with_pos -> datatype' -> single t
+end = struct
+  type single = unit
+  and multi = unit
+  and phrasenode = Constant of Constant.t (*TODO: Temp*)
+  and phrase = phrasenode WithPos.t
+  and common =
+    { kind: SugarKind.t;
+      qs: SugarQuantifier.t list;
+      (** TODO: Will most likely need to be a list (i.e. multiple implementations of said method), better yet a Hastbl! Z*)
+      body: phrase option }
+  and 'a t =
+    | Single of { common: common;
+                  binder: Binder.with_pos;
+                  datatype: datatype' }
+    | Multi of { common: common;
+                  methods: (Binder.with_pos * datatype') list }
+  [@@deriving show]
+
+  let kind : type a. a t -> SugarKind.t = function
+  | Single { common; _ }
+  | Multi { common; _ } -> common.kind
+
+  let qs : type a. a t -> SugarQuantifier.t list = function
+  | Single { common; _ }
+  | Multi { common; _ } -> common.qs
+
+  let body : type a. a t -> phrase option = function
+  | Single { common; _ }
+  | Multi { common; _ } -> common.body
+
+  (*let body : type a. a t -> phrase = function
+  | Single { common; _ } 
+  | Multi { common; _ } -> 
+    match common.body with
+    | Some body -> body
+    | None -> 
+      raise (Errors.internal_error 
+              ~filename:"sugartypes.ml" 
+              ~message:"Cannot get body of class method - it was not instantiated with a body (ClassMethod.body)")*)
+
+  let methods : type a. a t -> (Binder.with_pos * datatype') list = function
+  | Single { binder; datatype; _ } -> [(binder, datatype)]
+  | Multi { methods; _ } -> methods
+
+  let method' : single t -> (Binder.with_pos * datatype') = function
+    | Single { binder; datatype; _ } -> (binder, datatype)
+    | _ -> assert false
+
+  let modify : type a. ?methods:(Binder.with_pos * datatype') list -> ?kind:SugarKind.t -> ?qs:SugarQuantifier.t list -> ?body:phrase -> a t -> a t
+    = fun ?methods ?kind ?qs ?body class_method ->
+    let common : type a. a t -> common = function
+      | Single { common; _ } -> common
+      | Multi { common; _ } -> common
+    in
+    let common =
+      let common = common class_method in
+      common
+      |> fun c -> Option.fold ~none:c ~some:(fun kind -> { c with kind }) kind
+      |> fun c -> Option.fold ~none:c ~some:(fun qs -> { c with qs }) qs
+    in
+    match class_method, methods with
+    | Single _, Some [(binder, datatype)] ->
+      Single { common; binder; datatype }
+    | Multi _, Some methods ->
+      Multi { common; methods }
+    | _, _ ->
+      raise (Errors.internal_error ~filename:"sugartypes.ml" ~message:"Invalid arguments (ClassMethod.modify)")
+
+  let multi : SugarKind.t -> SugarQuantifier.t list -> phrase option -> (Binder.with_pos * datatype') list -> multi t
+    = fun kind qs body methods ->
+    Multi { common = { kind; qs; body }; methods }
+
+  let single : SugarKind.t -> SugarQuantifier.t list -> phrase option -> Binder.with_pos -> datatype' -> single t
+    = fun kind qs body binder datatype ->
+    Single { common = { kind; qs; body }; binder; datatype }
+end*)
 
 module Alien: sig
   type 'a t [@@deriving show]
@@ -531,20 +673,23 @@ and phrasenode =
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
-                 datatype' option
-  | Fun     of function_definition
-  | Funs    of recursive_function list
-  | Foreign of Alien.single Alien.t
-  | Import of { pollute: bool; path : Name.t list }
-  | Open of Name.t list
-  | Aliases of alias list
-  | Infix   of { assoc: Associativity.t;
-                 precedence: int;
-                 name: string }
-  | Exp     of phrase
-  | Module  of { binder: Binder.with_pos; members: binding list }
-  | AlienBlock of Alien.multi Alien.t
+  | Val      of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
+                  datatype' option
+  | Fun      of function_definition
+  | Funs     of recursive_function list
+  | Foreign  of Alien.single Alien.t
+  | Import   of { pollute: bool; path : Name.t list }
+  | Open     of Name.t list
+  | Aliases  of alias list
+  | Infix    of { assoc: Associativity.t;
+                  precedence: int;
+                  name: string }
+  | Exp      of phrase
+  | Module   of module_definition
+  | AlienBlock  of Alien.multi Alien.t
+  | Class    of subkind_class_definition
+  (* | ClassMethod of ClassMethod.single ClassMethod.t *)
+  | Instance of instance_definition
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -583,6 +728,20 @@ and recursive_functionnode = {
     rec_frozen : bool
   }
 and recursive_function = recursive_functionnode WithPos.t
+and module_definition = { 
+  module_binder: Binder.with_pos; 
+  module_members: binding list 
+}
+and subkind_class_definition = {
+  class_binder: Binder.with_pos;
+  class_tyvar: SugarQuantifier.t list; (* NOTE: the super-class-like feature will be derived from quantifer notation. i.e. class Ord : (a::Eq) ... *)
+  class_methods: (Binder.with_pos * datatype') list;
+}
+and instance_definition = {
+  instance_binder: Binder.with_pos;
+  instance_type: datatype';
+  instance_methods: (Name.t * phrase) list;
+}
   [@@deriving show]
 
 type directive = string * string list
@@ -597,7 +756,7 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-exception ConcreteSyntaxError       of (Position.t * string)
+exception ConcreteSyntaxError of (Position.t * string)
 
 let tabstr : SugarQuantifier.t list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
@@ -608,7 +767,7 @@ let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
     | _  ->
-       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
+       let tv = SugarTypeVar.mk_unresolved "$none" (SugarKind.mk_unresolved_none) `Rigid in
        let make_arg ty =
          (Datatype.Type
             (WithPos.make (Datatype.TypeVar tv)),
@@ -620,7 +779,7 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> WithPos.node e
     | _  ->
-       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
+       let tv = SugarTypeVar.mk_unresolved "$none" (SugarKind.mk_unresolved_none) `Rigid in
        let make_arg ty =
          Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
@@ -826,6 +985,15 @@ struct
             (WithPos.nodes_of_list funs)
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
+    | Instance { instance_methods; _} ->
+      let bound_methods =
+        List.fold_left
+          (fun acc (op, _) ->
+            StringSet.add (op) acc)
+          (StringSet.empty)
+          instance_methods
+      in
+      bound_methods, empty
     | Import _
     | Open _
     | Aliases _ -> empty, empty
@@ -851,13 +1019,25 @@ struct
             (Alien.declarations alien)
         in
         bound_foreigns, empty
-    | Module { members; _ } ->
+    | Class { class_methods; _} ->
+      let bound_methods =
+        List.fold_left
+          (fun acc (bndr, _) ->
+            StringSet.add (Binder.to_name bndr) acc)
+          (StringSet.empty)
+          class_methods
+      in
+      bound_methods, empty
+    | Module { module_members; _ } ->
        List.fold_left
          (fun (bnd, fvs) b ->
            let bnd', fvs' = binding b in
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
-         (empty, empty) members
+         (empty, empty) module_members
+    (* Shouldn't be encountered yet, have to desugar a class first *)
+    (*| ClassMethod _ -> assert false*)
+
   and funlit (fn : funlit) : StringSet.t =
     match fn with
     | NormalFunlit n_fn -> normal_funlit n_fn

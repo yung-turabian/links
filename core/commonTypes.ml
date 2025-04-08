@@ -3,6 +3,11 @@
 
 open Utility
 
+module Name = struct
+  type t = string
+    [@@deriving show]
+end
+
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
@@ -48,65 +53,108 @@ let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
 module Restriction = struct
-  type t =
-    | Any
-    | Base
-    | Mono
-    | Session
-    | Effect
+
+  type t = string
     [@@deriving eq,show]
+    
+  let restrictions : (t, (t -> t -> t option)) Hashtbl.t = Hashtbl.create 20
 
-  let is_any = function
-    | Any -> true
-    | _   -> false
+  (* Add a new restriction dynamically *)
+  let add name min_func =
+    if Hashtbl.mem restrictions name then
+      failwith ("Restriction " ^ name ^ " already exists")
+    else
+      Hashtbl.add restrictions name min_func
+  
+  (* Get the min function for a restriction *)
+  let get_min_func name =
+    try Hashtbl.find restrictions name
+    with Not_found -> failwith ("Restriction " ^ name ^ " not found")
 
-  let is_base = function
-    | Base -> true
-    | _    -> false
+  (* Compute the minimum of two restrictions 
+    TODO: pretty hacky and should rewrite *)
+  let min r1 r2 =
+    let min_func_r1 = get_min_func r1 in
+    let min_func_r2 = get_min_func r2 in
 
-  let is_mono = function
-    | Mono -> true
-    | _    -> false
+    (* Try to find the minimum using r1's min function *)
+    match min_func_r1 r1 r2 with
+    | Some result -> Some result
+    | None ->
+      (* If r1's min function returns None, try using r2's min function *)
+      match min_func_r2 r2 r1 with
+      | Some result -> Some result
+      | None -> None
+  
+  (** TODO: Computer the smallest mutual restriction of the two. *)
+  let mut r1 r2 = r1
 
-  let is_session = function
-    | Session -> true
-    | _       -> false
+  (* Check if a restriction exists *)
+  let exists name : bool =
+    Hashtbl.mem restrictions name
 
-  let is_effect = function
-    | Effect -> true
-    | _      -> false
+  (* Convert a restriction to its string representation *)
+  let to_string r : string = r
 
-  let to_string = function
-    | Any     -> "Any"
-    | Base    -> "Base"
-    | Mono    -> "Mono"
-    | Session -> "Session"
-    | Effect  -> "Eff"
-
-  let min l r =
-    match l, r with
-    | Any, Any         -> Some Any
-    | Mono, Mono       -> Some Mono
-    | Session, Session -> Some Session
-    | Effect, Effect   -> Some Effect
-    | Base, Base       -> Some Base
-    | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
-    | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
-    | Session, Mono | Mono, Session -> Some Session (* Super dubious, but we don't have another way*)
-    | _ -> None
 end
 
-(* Convenient aliases for constructing values *)
-let res_any     = Restriction.Any
-let res_base    = Restriction.Base
-let res_mono    = Restriction.Mono
-let res_session = Restriction.Session
-let res_effect  = Restriction.Effect
+(* Default restrictions *)
+let () =
+  Restriction.add "Any" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Any", "Any" -> Some "Any"
+    | "Any", _ | _, "Any" -> Some r2 (* Any will narrow to anything. *)
+    | _ -> None
+  );
+
+  Restriction.add "Mono" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Mono", "Mono" -> Some "Mono"
+    | _ -> None
+  );
+
+  Restriction.add "Base" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Base", "Base" -> Some "Base"
+    | "Base", "Mono" | "Mono", "Base" -> Some "Base" (* Mono can narrow to Base. *)
+    | _ -> None
+  );
+
+  Restriction.add "Session" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Session", "Session" -> Some "Session"
+    (* Super dubious, but we don't have another way. *)
+    | "Session", "Mono" | "Mono", "Session" -> Some "Session"
+    | _ -> None
+  );
+
+  Restriction.add "Effect" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Effect", "Effect" -> Some "Effect"
+    | _ -> None
+  )
+
+(* Test, should be created with class *)
+(* Add a new restriction dynamically, e.g., Numeric *)
+let () =
+  Restriction.add "Numeric" (fun r1 r2 ->
+    match (r1, r2) with
+    | "Numeric", "Numeric" -> Some "Numeric"
+    | "Numeric", "Mono" | "Mono", "Numeric" -> Some "Numeric"
+    | _ -> None
+  )
+
+(* Convenient aliases for constructing default values *)
+let res_any     = "Any"
+let res_base    = "Base"
+let res_mono    = "Mono"
+let res_session = "Session"
+let res_effect  = "Effect"
 
 module Subkind = struct
   type t = Linearity.t * Restriction.t
     [@@deriving eq,show]
-
+  
   let to_string (lin, res) =
     Printf.sprintf "(%s,%s)"
       (Linearity.to_string   lin)
@@ -118,6 +166,20 @@ module Subkind = struct
   let as_session (lin, _) = (lin, res_session)
 end
 
+let default_subkind : Subkind.t = (lin_unl, res_any)
+let any_subkind : Subkind.t = (lin_any, res_any)
+
+(* NOTE: adopted from sugartypes.ml *)
+(* NOTICE: `lin_any` here means this eff_row_var can be unified with
+    linear or unlimited row types *)
+
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
+let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
+
+let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
+
+(* NOTE: should remain static *)
 module PrimaryKind = struct
   type t =
     | Type
@@ -135,6 +197,8 @@ end
 let pk_type     = PrimaryKind.Type
 let pk_row      = PrimaryKind.Row
 let pk_presence = PrimaryKind.Presence
+
+let default_kind : PrimaryKind.t = PrimaryKind.Type
 
 module Kind = struct
   type t = PrimaryKind.t * Subkind.t
@@ -274,11 +338,6 @@ let loc_unknown = Location.Unknown
 
 module Freedom = struct
   type t = [`Flexible | `Rigid]
-    [@@deriving show]
-end
-
-module Name = struct
-  type t = string
     [@@deriving show]
 end
 

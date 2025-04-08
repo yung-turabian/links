@@ -236,8 +236,8 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | Alien { binder; _ } :: bs ->
-           let f = Var.var_of_binder binder in
+        | Alien { alien_binder; _ } :: bs ->
+           let f = Var.var_of_binder alien_binder in
            let fvs = IntSet.remove f fvs in
            o#close_cont fvs bs
         | Module _::_ ->

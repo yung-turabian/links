@@ -411,8 +411,8 @@ struct
     | Let (x, body) -> Let (binder x, body)
     | Fun def -> Fun (fun_def def)
     | Rec defs -> Rec (List.map fun_def defs)
-    | Alien { binder = x; object_name; language } ->
-       Alien { binder = binder x; object_name; language }
+    | Alien { alien_binder = x; object_name; language } ->
+       Alien { alien_binder = binder x; object_name; language }
     | Module _ ->
        raise (Errors.internal_error
                 ~filename:"closures.ml"

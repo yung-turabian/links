@@ -184,11 +184,11 @@ let create_module_info_map program =
     (* Recursively traverse a list of modules *)
     let rec traverse_modules = function
       | [] -> []
-      | {node=Module { binder; members };_} :: bs ->
+      | {node=Module { module_binder; module_members };_} :: bs ->
           (* Recursively process *)
-          let submodule_name = Binder.to_name binder in
+          let submodule_name = Binder.to_name module_binder in
           let new_path = if name = "" then [] else parent_path @ [name] in
-          create_and_add_module_info new_path submodule_name members;
+          create_and_add_module_info new_path submodule_name module_members;
           (* Add the name to the list, process remainder. *)
           submodule_name :: (traverse_modules bs)
       | _bs -> assert false in (* List should only contain modules *)

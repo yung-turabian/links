@@ -32,12 +32,12 @@ type tyvar_map_entry =
 
 (**
   Maps used for storing info about type variables.  Note that kinding info is
-  stored both in {Sugartypes.kind} and the meta_*_ Unionfind points of the
+  stored both in {Sugartypes.SugarKind} and the meta_*_ Unionfind points of the
   resolved constructors.  However, in the former, the kinding info is optional,
   whereas it is mandatory in the second. We use the convention that information
-  the information Sugartypes.kind takes precedence over the kinding info in the
+  the information Sugartypes.SugarKind takes precedence over the kinding info in the
   Unionfind points. This allows us to properly express the absence of kinding
-  information. Once an entry of Sugartypes.kind is present, it must of course be
+  information. Once an entry of Sugartypes.SugarKinds is resolved, it must of course be
   consistent with the information in the Unionfind point
 *)
 type tyvar_map = tyvar_map_entry StringMap.t
@@ -47,6 +47,7 @@ let infer_kinds
               |> convert parse_bool
               |> sync)
 
+module SEnv = Env.String
 
 (* Errors *)
 
@@ -102,12 +103,6 @@ let is_anonymous stv =
   SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
 
 
-(** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
-let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
-      (name, (Some pk_type, subkind), freedom)
-  | v -> v
-
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Kind.t  * Freedom.t) option =
   let extract_data  =
     function
@@ -137,7 +132,7 @@ let sig_allows_implicitly_bound_vars :  datatype' option -> bool  =
   | None -> true
 
 
-let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyvar_map_entry =
+let lookup_tyvar_exn name (map : tyvar_map) : (PrimaryKind.t option * Subkind.t option) * Freedom.t * tyvar_map_entry =
   let extract_freedom =
     (* Consistency check: If the tyvar map contains subkind info,
        then it must coindice with the subkind in the Unionfind point *)
@@ -230,11 +225,68 @@ let resolved_var_of_entry =
 
 
 
-class typevar_visitor initial_map allow_implicits =
+class typevar_visitor initial_map allow_implicits subkind_env =
 object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
   val tyvar_map : tyvar_map = initial_map
+  val subkind_env : Types.subkind_environment = subkind_env
+
+
+  (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
+  method ensure_kinded pos ((name : string), (kind : SugarKind.t), (freedom : Freedom.t) as v) =
+  let open SugarKind in
+  (*let subkinds =  in*)
+  match kind with
+  (** Catches ::Numeric, a named subkind,
+    as opposed to defined by linearity and restriction *)
+  | KUnresolved (None, (None, Some res)) ->
+    if is_anonymous_name name then
+      o, v
+    else
+      (** Confirm that subkind exists in the environment of subkinds, at this point 
+          should contain defaults as well as class interfaced subkinds. *)
+      let pk, sk = 
+        try 
+          match SEnv.find res subkind_env with
+          | `Decl (pk, sk) -> (pk, sk)
+          | `Class ((pk, sk), _, _) -> (pk, sk)
+        with NotFound _ ->
+            raise (Errors.unbound_subkind pos res)
+      in
+      o, (name, KResolved (Some pk, Some sk), freedom)
+
+  (** Catches ::Type *)
+  | KUnresolved (Some pk, (None, None)) -> 
+      o, (name, KResolved (Some pk, None), freedom)
+
+  (** Catches ::Type(Any, Any) & ::Type(Unl) *)
+  | KUnresolved (Some pk, (Some lin, Some res)) ->
+    if Restriction.exists res then
+      let sk = (lin, res) in
+      o, (name, KResolved (Some pk, Some sk), freedom)
+    else
+      failwith "Couldn't construct a subkind, the restriction doesn't exist"
+
+  (** Catches ::(Any, Base) *)
+  | KUnresolved (None, (Some lin, Some res)) ->
+    if Restriction.exists res then
+      let sk = (lin, res) in
+      o, (name, KResolved (Some pk_type, Some sk), freedom)
+    else
+      failwith ("Couldn't resolve subkind with linearity: " ^ 
+        (Linearity.to_string lin) ^ " and restrition: " ^ (res))
+
+  (** Catches unkinded quants *)
+  | KUnresolved (None, (None, None)) when not (Settings.get infer_kinds) ->
+      o, (name, KResolved(Some pk_type, None), freedom)
+  
+  | KUnresolved _ ->
+    failwith "failed to resolved subkind; this shouldn't happen"
+
+  | KResolved _ -> 
+      o, (name, kind, freedom)
+
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
@@ -290,9 +342,12 @@ object (o : 'self)
 
 
   (** Used for type/row/presence variables found along the way, including anonymous ones *)
-  method add ?pos name (pk : PrimaryKind.t) ?(is_eff=false) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
+  method add ?pos name (kind : SugarKind.t) ?(is_eff=false) freedom : 'self * SugarTypeVar.t =
     let anon = is_anonymous_name name in
     let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
+    let o, (_, kind, _) = o#ensure_kinded pos (name, kind, freedom) in
+    let pk = OptionUtils.from_option pk_type (SugarKind.get_resolved_pk_exn kind) in
+    let sk = SugarKind.get_resolved_sk_exn kind in
     if not anon && StringMap.mem name tyvar_map then
       begin
         let (pk', sk'), freedom', existing_entry  = lookup_tyvar_exn name tyvar_map in
@@ -358,9 +413,10 @@ object (o : 'self)
         SugarQuantifier.get_unresolved_exn sq in
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let (_, (pk, sk), freedom) = ensure_kinded v in
+      let o, (_, kind, freedom) = o#ensure_kinded pos v in
+      let pk = SugarKind.get_resolved_pk_exn kind in
+      let sk = SugarKind.get_resolved_sk_exn kind in
       let freedom = if rigidify then `Rigid else freedom in
-      (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in
       let o' = o#bind name entry in
       let names' = StringSet.add name names in
@@ -390,8 +446,8 @@ object (o : 'self)
     let open Datatype in
     function
     | TypeVar stv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn stv in
-       let o, resolved_tv = o#add name pk_type ~is_eff:is_eff sk freedom in
+       let (name, (is_eff, kind), freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let o, resolved_tv = o#add name kind ~is_eff:is_eff freedom in
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
@@ -423,14 +479,15 @@ object (o : 'self)
           appear in contexts where implictly scoped variables are allowed.  *)
        o, orig
     | Open srv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn srv in
-       let o, resolved_rv = o#add name pk_row ~is_eff:is_eff sk freedom in
+       let (name, (is_eff, kind), freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let (_, l, r) = SugarKind.get_unresolved_exn kind in
+       let o, resolved_rv = o#add name (SugarKind.mk_unresolved (Some pk_row) (l, r)) ~is_eff:is_eff freedom in
        o, Datatype.Open resolved_rv
     | Recursive (stv, r) ->
        let original_o = o in
 
        let name = SugarTypeVar.get_unresolved_name_exn stv in
-       let entry = make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
+       let entry = make_fresh_entry (Some pk_row) (Some default_subkind) `Rigid in
        let o = o#bind name entry in
        let o, t = o#row r in
        let o, _, _ = o#unbind name original_o in
@@ -446,8 +503,9 @@ object (o : 'self)
        let o, t = o#datatype t in
        o, Present t
     | Var utv ->
-       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn utv in
-       let o, resolved_pv = o#add name pk_presence ~is_eff:is_eff sk freedom in
+       let (name, (is_eff, kind), freedom) = SugarTypeVar.get_unresolved_exn utv in
+       let (_, l, r) = SugarKind.get_unresolved_exn kind in
+       let o, resolved_pv = o#add name (SugarKind.mk_unresolved (Some pk_presence) (l, r)) ~is_eff:is_eff freedom in
        o, Var resolved_pv
 
   method! phrase p =
@@ -581,7 +639,74 @@ object (o : 'self)
 
        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        (o, b)
+    | Class {class_binder; class_tyvar; class_methods} ->
 
+      (*let name = Binder.to_name class_binder in
+
+      Restriction.add name (fun r1 r2 ->
+        match (r1, r2) with
+        | x, y when x = name && y = name -> Some name
+        | name, "Mono" | "Mono", name -> Some name (* HACK: find a better way of going about this? *)
+        | _ -> None
+      );
+      Debug.print ("Adding restriction " ^ name);
+
+
+      (* TODO: create constraint here *)
+
+      Debug.print ("Creating constraint " ^ name);
+
+      let updated_qs = List.map (fun q ->
+          let (n, k, f) = SugarQuantifier.get_unresolved_exn q in
+          let (nam, pk, sk, lin, _) = SugarKind.get_unresolved_exn k in
+          let new_kind = SugarKind.mk_resolved pk (Some (lin_any, name)) in
+          (SugarQuantifier.mk_unresolved n new_kind f)
+        ) class_tyvar in *)
+
+      (*let o, class_binder = o#binder class_binder in
+
+      let o, class_tyvar, class_methods = 
+        o#quantified ~rigidify:true class_tyvar (fun o' -> 
+          o'#list (fun o (b, (dt : datatype')) ->
+            let handle (o, b, dt) =
+              let o, b = o#binder b in
+              let o, dt = o#datatype' dt in (* Ensure dt is resolved *)
+              o, (b, dt)
+            in
+
+            let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
+            let o = o#set_allow_implictly_bound_vars implicits_allowed in
+            let o = o#set_toplevelness false in
+            let o, (b, dt) = apply handle (o, b, dt) in
+            let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+            (o, (b, dt)) (* Explicitly pair b with the resolved dt *)
+          ) class_methods
+        )    
+      in*)
+
+      (o, Class {class_binder; 
+                  class_tyvar; 
+                  class_methods})
+    (*| ClassMethod method' ->
+      let handle (o, b, dt) =
+        let o, b = o#binder b in
+        let o, dt = o#datatype' dt in
+        o, (b, dt)
+      in
+      let o, methods =
+      (* (Binder.with_pos * datatype') list *)
+      o#list
+        (fun o (b, (dt : datatype')) ->
+          let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
+          let o = o#set_allow_implictly_bound_vars implicits_allowed in
+          let o = o#set_toplevelness false in
+          let o, (b, dt) = apply handle (o, b, dt) in
+          let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+          o, (b, dt))
+        (ClassMethod.methods method')
+    in
+    let o, kind = o#kind (ClassMethod.kind method') in
+    o, ClassMethod (ClassMethod.modify ~methods ~kind method')*)
     | Foreign alien ->
        (* For alien bindings, signature determines whether implicitly
           bound vars are allowed *)
@@ -610,28 +735,28 @@ object (o : 'self)
 end
 
 
-let program p =
-  let v = new typevar_visitor StringMap.empty true in
+let program subkind_env p =
+  let v = new typevar_visitor StringMap.empty true subkind_env in
   snd (v#program p)
 
 
-let sentence =
+let sentence subkind_env =
 
 function
   | Definitions bs ->
-     let v = new typevar_visitor StringMap.empty true in
+     let v = new typevar_visitor StringMap.empty true subkind_env in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
-     let v = new typevar_visitor StringMap.empty true in
+     let v = new typevar_visitor StringMap.empty true subkind_env in
      let _o, p = v#phrase p in
       Expression p
   | Directive   d  ->
      Directive d
 
-let standalone_signature t =
+let standalone_signature subkind_env t =
   let allow_implicits = sig_allows_implicitly_bound_vars (Some (t, None)) in
-  let v = new typevar_visitor StringMap.empty allow_implicits in
+  let v = new typevar_visitor StringMap.empty allow_implicits subkind_env in
   snd (v#datatype t)
 
 
@@ -642,12 +767,16 @@ module Untyped = struct
   let name = "type_variables"
 
   let program state program' =
-    let _tyenv = Context.typing_environment (context state) in
-    let program' = program program' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let subkind_env = tyenv.subkind_env in
+    let program' = program subkind_env program' in
     return state program'
 
   let sentence state sentence' =
-    let _tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence sentence' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let subkind_env = tyenv.subkind_env in
+    let sentence'' = sentence subkind_env sentence' in
     return state sentence''
 end

@@ -11,7 +11,7 @@
  * Desugars modules into plain binders.
  *
  * module Foo {
- *    val bobsleigh = ...;
+ *    var bobsleigh = ...;
  *    fun x() {
  *    }
  *
@@ -20,14 +20,14 @@
  *      }
  *    }
  * }
- * val x = ...;
+ * var x = ...;
  *
  *  --->
  *
- * val Foo_0$bobsleigh_0 = ...;
+ * var Foo_0$bobsleigh_0 = ...;
  * fun Foo_0$x1() { ...}
  * fun Foo_0$Bar_2$y_0() { ... }
- * val x1 = ...;
+ * var x1 = ...;
  *
  * The names are internal. The [Name.prettify] function in
  * [module_hacks.ml] attempts to recover the source representation of
@@ -243,10 +243,10 @@ end
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
   = fun ?(toplevel=false) renamer scope binding ->
   match binding.node with
-  | Module { binder; members } ->
-     let name = Binder.to_name binder in
+  | Module { module_binder; module_members } ->
+     let name = Binder.to_name module_binder in
      let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
-     let bs'    = visitor#bindings members in
+     let bs'    = visitor#bindings module_members in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
@@ -464,6 +464,19 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              ts' []
            in
            Aliases ts''
+      | Class { class_binder; class_tyvar; class_methods } ->
+        (*let methods' = 
+          self#list
+            (fun o (bndr, dt) ->
+              let dt' = o#datatype' dt in
+              let bndr' = o#binder bndr in
+              (bndr', dt'))
+            ClassMethod.(methods class_methods)
+        in
+        let class_binder = self#binder class_binder in*)
+        Class {class_binder; 
+                class_tyvar; 
+                class_methods }
       | Val (pat, (tvs, body), loc, dt) ->
        (* It is important to process [body] before [pat] to avoid
           inadvertently bringing the binder(s) in [pat] into the
@@ -492,6 +505,16 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              Alien.(declarations aliendecls)
          in
          AlienBlock (Alien.modify ~declarations:decls' aliendecls)
+      (*| ClassMethod method' ->
+        let methods =
+          self#list
+            (fun o (b, dt) ->
+              let dt = o#datatype' dt in
+              let b = o#binder b in
+              (b, dt))
+            (ClassMethod.methods method')
+        in
+        ClassMethod (ClassMethod.modify ~methods method')*)
       | Infix { name; assoc; precedence } ->
          Infix { name = self#fixity name; assoc; precedence }
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)

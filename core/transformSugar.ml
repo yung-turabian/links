@@ -29,15 +29,15 @@ let type_section env =
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
 
-let type_unary_op env tycon_env =
-  let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
+let type_unary_op env tycon_env subkind_env =
+  let datatype = DesugarDatatypes.read ~aliases:tycon_env ~subkinds:subkind_env in function
     | UnaryOp.Minus      -> datatype "(Int) -> Int"
     | UnaryOp.FloatMinus -> datatype "(Float) -> Float"
     | UnaryOp.Name n     -> TyEnv.find n env
 
-let type_binary_op env tycon_env =
+let type_binary_op env tycon_env subkind_env =
   let open BinaryOp in
-  let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
+  let datatype = DesugarDatatypes.read ~aliases:tycon_env ~subkinds:subkind_env in function
   | Minus        -> TyEnv.find "-" env
   | FloatMinus   -> TyEnv.find "-." env
   | RegexMatch flags ->
@@ -53,7 +53,7 @@ let type_binary_op env tycon_env =
   | And
   | Or           -> datatype "(Bool,Bool) -> Bool"
   | Cons         -> TyEnv.find "Cons" env
-  | Name "++"    -> TyEnv.find "Concat" env
+  (*| Name "++"    -> TyEnv.find "Concat" env*)
   | Name ">"
   | Name ">="
   | Name "=="
@@ -146,6 +146,7 @@ class transform (env : Types.typing_environment) =
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
+    val subkind_env = env.Types.subkind_env
     val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
@@ -166,6 +167,9 @@ class transform (env : Types.typing_environment) =
 
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
+
+    method bind_subkind name subkind =
+      {<subkind_env = TyEnv.bind name subkind subkind_env >}
 
     method bind_binder bndr =
       {< var_env = TyEnv.bind (Binder.to_name bndr)  (Binder.to_type bndr) var_env >}
@@ -197,13 +201,16 @@ class transform (env : Types.typing_environment) =
     method row : Types.row -> ('self_type * Types.row) =
       fun row -> (o, row)
 
+    method kind : SugarKind.t -> ('self_type * SugarKind.t) =
+      fun kind -> (o, kind)
+
     method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t * Types.datatype) =
       fun op ->
-        (o, op, type_unary_op var_env tycon_env op)
+        (o, op, type_unary_op var_env tycon_env subkind_env op)
 
     method binop : BinaryOp.t -> ('self_type * BinaryOp.t * Types.datatype) =
       fun op ->
-        (o, op, type_binary_op var_env tycon_env op)
+        (o, op, type_binary_op var_env tycon_env subkind_env op)
 
     method section : Section.t -> ('self_type * Section.t * Types.datatype) =
       fun section ->
@@ -866,7 +873,7 @@ class transform (env : Types.typing_environment) =
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
          (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam);
                    fun_location; fun_signature; fun_frozen; fun_unsafe_signature })
-      | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
+      | Fun _ -> raise (internal_error "transformSugar.ml: unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
@@ -899,15 +906,49 @@ class transform (env : Types.typing_environment) =
                    let o = o#bind_tycon name
                      (`Alias (pk_row, List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
                    (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
-                | _ -> raise (internal_error "Unannotated type alias")
+                | _ -> raise (internal_error "transformSugar.ml: unannotated type alias")
             ) ts in
           (o, Aliases ts)
+      | Class { class_binder; class_tyvar; class_methods } ->    
+        (*let name = Binder.to_name class_binder in
+        let qs = List.map (SugarQuantifier.get_resolved_exn) class_tyvar in
+        let method_binders = List.map fst (ClassMethod.methods class_methods) in
+        let method_names = List.map Binder.to_name method_binders in
+
+        (* Process class methods *)
+        let (o, methods) = 
+          listu o 
+            (fun o (b, dt) ->
+            let o, b = o#binder b in
+            let (o, dt) = o#datatype' dt in
+            o, (b, dt)) 
+            (ClassMethod.methods class_methods) 
+        in
+        
+        (* Defaults to restriction of its name *)
+        let o = o#bind_subkind name (`Class ( (pk_type, (lin_any, name)), qs, method_names ) ) in
+        *)
+        (o, Class { class_binder; class_tyvar; class_methods })
+      (*| ClassMethod method' ->
+        let (o, methods) =
+          listu o
+            (fun o (b, dt) ->
+              let o, b = o#binder b in
+              let o, dt = o#datatype' dt in
+              (o, (b, dt)))
+            (ClassMethod.methods method')
+        in
+        let o, kind = o#kind (ClassMethod.kind method') in
+        (o, ClassMethod (ClassMethod.modify ~kind ~methods method'))*)
+      (*| Instance i -> (o, Instance i)*)
+
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
-      | AlienBlock _ -> assert false
-      | Module _ -> assert false
-      | Import _ -> assert false
+      | Instance _
+      | AlienBlock _
+      | Module _
+      | Import _
       | Open _ -> assert false
 
     method binding : binding -> ('self_type * binding) =

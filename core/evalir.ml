@@ -557,9 +557,9 @@ struct
             computation env cont (bs, tailcomp)
          | Rec _ ->
             computation env cont (bs, tailcomp)
-         | Alien { binder; _ } ->
-            let var = Var.var_of_binder binder in
-            let scope = Var.scope_of_binder binder in
+         | Alien { alien_binder; _ } ->
+            let var = Var.var_of_binder alien_binder in
+            let scope = Var.scope_of_binder alien_binder in
             computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function

@@ -1,3 +1,107 @@
+
+module Data {
+		typename Numeric = [| Int | Float |];
+
+		#infix 4 ==;
+		#infix 4 <>;
+		#infixr 3 &&;
+		#infixr 2 ||;
+
+		class Eq : (a::Type) {
+				#sig == : (a, a) -> Bool;
+				#sig <> : (a, a) -> Bool;
+				sig compare : (a, a) -> Bool;
+		}
+
+		infix 4 <<;
+		#infix 4 >;
+		#infix 4 <=;
+		#infix 4 >=;
+
+		class Ord : (a::Eq) {
+				sig << : (a, a) -> Bool;
+				#sig > : (a, a) -> Bool;
+				#sig <= : (a, a) -> Bool;
+				#sig >= : (a, a) -> Bool;
+				#sig maximum : (a, a) -> a;
+				#sig minumum : (a, a) -> a;
+				sig maX : (a, a) -> a;
+		}
+	
+		sig minimum : (a::Ord, a) -> a
+		fun minimum(x,y) {
+			if (x < y) { x }
+			else { y }
+		}
+		
+		sig maximum : (a::Ord, a) -> a
+		fun maximum(a,b) {
+			if (a > b) { a }
+			else { b }
+		}
+
+		sig ltInt : (Int, Int) -> Bool
+		fun ltInt(f,g) {
+				if (f < g) true
+				else false
+		}
+		
+		#instance Ord : Int {
+		#		<< = ltInt;
+		#}
+
+		#class Show : (a::Base) {
+		#		sig show : (a) -> String;
+		#}
+
+		fun showBool(b) {
+				switch(b) {
+						case true -> "true"
+						case false -> "false"
+				}
+		}
+
+		#instance Show : Bool {
+		#		show : showBool;
+		#}
+
+		
+		# Adopted from PureScript
+
+		#class Monoid : a {
+		#		
+		#}
+
+		#class Group : a {
+		#
+		#}
+
+		#class Ring : a {
+		#
+		#}
+
+		#class Semiring : (a) {
+		#		sig + : (a, a) -> a;
+		#}
+		
+		#instance Semiring : Int {
+		#		+ : 
+		#}
+}
+
+open Data;
+
+
+infixr 5 ++;
+
+sig ++ : ([a], [a]) -> [a]
+op ms ++ ns {
+		switch (ms) {
+				case [] 		-> ns
+				case m::ms  -> m::(ms ++ ns)
+		}
+}
+
 fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
@@ -7,6 +111,30 @@ fun ignore (_) { () }
 
 fun println(msg) {
   print(msg ^^ "\n")
+}
+
+unsafe sig length : ([a]) -> Int
+fun length (l) {
+		unsafe sig aux : ([a], Int) -> Int
+		fun aux(l, n) {
+				switch (l) {
+						case []    -> n
+						case _::l -> aux(l, n + 1)
+				}
+		}
+		aux(l, 0)
+}
+
+unsafe sig sum : ([Int]) -> Int
+fun sum (l) {
+		unsafe sig aux : ([Int], Int) -> Int
+		fun aux(xs, n) {
+				switch (l) {
+						case []    -> n
+						case x::xs -> aux(xs, n + x)
+				}
+		}
+		aux(l, 0)
 }
 
 # Don't use a for comprehension to define concatMap, as
@@ -307,7 +435,7 @@ fun dropWhile(pred, list) {
 #   else 0
 # }
 
-sig abs : (Int) -> Int
+#sig abs : (Int) -> Int
 fun abs(i) {
   if (i < 0) -i else i
 }
@@ -338,6 +466,18 @@ fun intercalate(bone, rushes) {
   }
 }
 
+# Effectively a shortcut for implode(reverse(character_array))
+sig strrev : (String) ~> String
+fun strrev(s) {
+  fun aux(cs, rev) {
+    switch(cs) {
+      case []   -> implode(rev)
+      case c::cs -> aux(cs, c::rev)
+    }
+  }
+  aux(explode(s), [])
+}
+
 sig unlines : ([String]) ~> String
 fun unlines(ws) {
   implode(intercalate(explode("\n"), map(explode, ws)))
@@ -348,8 +488,34 @@ fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
 
-# lines :: String -> [String]
-# words :: String -> [String]
+fun strtok(s, r) {
+  var cs = explode(s);
+  fun aux(cs, w, ws, r) {
+    switch(cs) {
+      case []     -> 
+        if (w <> []) 
+          reverse(strrev(implode(w))::ws)
+        else
+          reverse(ws)
+      case c::cs  -> 
+        if (c == r) 
+          aux(cs, [], strrev(implode(w))::ws, r)
+        else
+          aux(cs, c::w, ws, r)
+    }
+  }
+  aux(cs, [], [], r)
+}
+ 
+sig lines : (String) ~> [String]
+fun lines(s) {
+  strtok(s, '\n')
+}
+
+sig words : (String) ~> [String]
+fun words(s) {
+  strtok(s, ' ')
+}
 
 ### Defined internally to Links:
 # ceiling :: Float -> Int
@@ -369,7 +535,6 @@ fun unwords(ws) {
 #
 # (**.) :: Float -> Float -> Float
 # exp :: Float -> Float
-# pi :: Float
 # signumFloat :: Float -> Int
 # round :: Float -> Int
 # truncate :: Float -> Int
@@ -458,18 +623,6 @@ fun avgF(l) {
     case [] -> 0.0
     case n::ns -> sumF(l) /. intToFloat(length(l))
   }
-}
-
-# Returns the minimum of a and b.
-fun minimum(a,b) {
-  if (a < b) { a }
-  else { b }
-}
-
-# Returns the maximum of a and b.
-fun maximum(a,b) {
-  if (a > b) { a }
-  else { b }
 }
 
 unsafe sig max_list : ([Int]) -> Int
@@ -1337,7 +1490,7 @@ typename Pid(a::Type) = Process({hear: a});
 # The effect row variable `e` can have kind `Row(Any)` because no linear
 # resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Any) . ((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1347,7 +1500,7 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row . ((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   xlin;
   var ap = new();
@@ -1357,8 +1510,8 @@ fun linFork(f) {
   request(ap)
 }
 
-#sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
+#sig reproduce : forall s::Session,e::Row . (AP(s), (s) ~e~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row . (AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   xlin;
   var x = accept(ap);

@@ -6,6 +6,19 @@ let fst3(x, _, _) = x
 let snd3(_, y, _) = y
 let thd3(_, _, z) = z
 
+let fst4(x, _, _, _) = x
+let snd4(_, y, _, _) = y
+let thd4(_, _, z, _) = z
+let for4(_, _, _, p) = p
+
+let fst5(x, _, _, _, _) = x
+let snd5(_, y, _, _, _) = y
+let thd5(_, _, z, _, _) = z
+let for5(_, _, _, p, _) = p
+let fth5(_, _, _, _, q) = q
+
+
+
 (** {1 Functional combinators} *)
 module Functional =
 struct
@@ -41,48 +54,49 @@ sig
   include Map.S
   exception Not_disjoint of key * string
 
-  val filterv : ('a -> bool) -> 'a t -> 'a t
   (** filter by value *)
+  val filterv : ('a -> bool) -> 'a t -> 'a t
 
-  val size : 'a t -> int
   (** the number of distinct keys in the map *)
+  val size : 'a t -> int
 
-  val to_alist : 'a t -> (key * 'a) list
   (** convert the map to an association list *)
+  val to_alist : 'a t -> (key * 'a) list
 
-  val from_alist : (key * 'a) list -> 'a t
   (** construct a map from an association list *)
+  val from_alist : (key * 'a) list -> 'a t
 
-  val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
   (** construct a list from a map *)
+  val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
 
   val megamap : (key * 'a -> key * 'b) -> 'a t -> 'b t
 
-  val pop : key -> 'a t -> ('a * 'a t)
   (** remove the item with the given key from the map and return the remainder. *)
-  val lookup : key -> 'a t -> 'a option
+  val pop : key -> 'a t -> ('a * 'a t)
+
   (** as `find', but return an option instead of raising an exception *)
+  val lookup : key -> 'a t -> 'a option
 
-  val union_disjoint : 'a t -> 'a t -> 'a t
   (** disjoint union *)
+  val union_disjoint : 'a t -> 'a t -> 'a t
 
-  val union_all : ('a t) list -> 'a t
   (** disjoint union of a list of maps *)
+  val union_all : ('a t) list -> 'a t
 
-  val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
+  val superimpose : 'a t -> 'a t -> 'a t
 
-  val split_paired : ('a * 'b) t -> ('a t * 'b t)
   (** split a pair map into a pair of maps *)
+  val split_paired : ('a * 'b) t -> ('a t * 'b t)
 
-  val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
+  val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
 
-  val filter : (key -> 'a -> bool) -> 'a t -> 'a t
   (** filters using both keys and values *)
+  val filter : (key -> 'a -> bool) -> 'a t -> 'a t
 
-  val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
   (** filters and applies a function -- None values discarded *)
+  val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
 
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
@@ -123,17 +137,18 @@ module String = struct
 end
 
 module Int = struct
-  type t = int
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
+  type t = int
   let compare i j = i-j
   let pp = Format.pp_print_int
   let show = string_of_int
 end
 
 module IntPair = struct
+  (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   type t = int * int
     [@@deriving show]
-  (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
+
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
 end
 
@@ -197,12 +212,6 @@ struct
     let pop item map =
       (find item map, remove item map)
 
-(* Implemented in NotFound to use original Not_found exception *)
-(*  let lookup item map =
-      try Some (find item map)
-      with NotFound _ -> None
-*)
-
     let union_disjoint a b =
       fold
         (fun k v r ->
@@ -260,11 +269,11 @@ module type Set =
 sig
   include Set.S
 
+  (** Take the union of a collection of sets *)
   val union_all : t list -> t
-    (** Take the union of a collection of sets *)
 
-  val from_list : elt list -> t
   (** Construct a set from a list *)
+  val from_list : elt list -> t
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
@@ -352,7 +361,7 @@ struct
     in if (t) < f then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
 
-  (** map with index *)
+  (** [mapIndex f list] map with index *)
   let mapIndex (f : 'a -> int -> 'b) : 'a list -> 'b list =
     let rec mi i =
       function
@@ -600,6 +609,10 @@ struct
     | [] :: xss -> transpose xss
     | (x :: xs) :: xss ->
        (x :: (List.map List.hd xss)) :: transpose (xs :: List.map List.tl xss)
+
+  let find_fstdiff = function
+  | [] -> None
+  | hd::tl -> List.find_opt (fun m -> m <> hd) tl
 end
 include ListUtils
 

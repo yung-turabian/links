@@ -32,10 +32,9 @@ class map :
     method binder          : Binder.with_pos -> Binder.with_pos
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
-    method subkind         : Subkind.t -> Subkind.t
-    method kind            : kind -> kind
+    method kind            : SugarKind.t -> SugarKind.t
     method freedom         : Freedom.t -> Freedom.t
-    method quantifier      :  SugarQuantifier.t -> SugarQuantifier.t
+    method quantifier      : SugarQuantifier.t -> SugarQuantifier.t
     method type_variable   : SugarTypeVar.t -> SugarTypeVar.t
     method row_var         : Datatype.row_var -> Datatype.row_var
     method row             : Datatype.row -> Datatype.row
@@ -75,6 +74,8 @@ class map :
     method aliasnode       : aliasnode -> aliasnode
     method alias           : alias -> alias
     method aliasbody       : aliasbody -> aliasbody
+    method subkind_class_definition : subkind_class_definition -> subkind_class_definition
+    method instance_definition : instance_definition -> instance_definition
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
     method recursive_functionnode : recursive_functionnode -> recursive_functionnode
@@ -117,8 +118,7 @@ class fold :
     method binder          : Binder.with_pos -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
-    method subkind         : Subkind.t -> 'self
-    method kind            : kind -> 'self
+    method kind            : SugarKind.t -> 'self
     method freedom         : Freedom.t -> 'self
     method type_variable   : SugarTypeVar.t -> 'self
     method quantifier      : SugarQuantifier.t -> 'self
@@ -160,6 +160,8 @@ class fold :
     method aliasnode       : aliasnode -> 'self
     method alias           : alias -> 'self
     method aliasbody       : aliasbody -> 'self
+    method subkind_class_definition : subkind_class_definition -> 'self
+    method instance_definition : instance_definition -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
     method recursive_functionnode  : recursive_functionnode -> 'self
@@ -186,6 +188,8 @@ object ('self)
   method aliasnode       : aliasnode -> 'self * aliasnode
   method alias           : alias -> 'self * alias
   method aliasbody       : aliasbody -> 'self * aliasbody
+  method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
+  method instance_definition : instance_definition -> 'self * instance_definition
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
@@ -230,8 +234,7 @@ object ('self)
   method section         : Section.t -> 'self * Section.t
   method sentence        : sentence -> 'self * sentence
   method string          : Name.t -> 'self * Name.t
-  method subkind         : Subkind.t -> 'self * Subkind.t
-  method kind            : kind -> 'self * kind
+  method kind            : SugarKind.t -> 'self * SugarKind.t
   method freedom         : Freedom.t -> 'self * Freedom.t
   method quantifier      : SugarQuantifier.t -> 'self * SugarQuantifier.t
   method type_variable   : SugarTypeVar.t -> 'self * SugarTypeVar.t
