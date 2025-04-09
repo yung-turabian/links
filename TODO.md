@@ -1,7 +1,4 @@
-+ Update ClassMethods, closer but still some kinks. Don't need to
-take it all the way to IR but up till sugartoir and set the associated binder to its value.
-    + However, instance operators may need binders since they arevariables pointing towards something.
-
++ Make constraints dynamic objects and then we are very close to being finished
 + Update repl.ml and types.ml so you can print subkind environment.
 
 1. Subkinds need to create new restrctions and dynamically add constraints,

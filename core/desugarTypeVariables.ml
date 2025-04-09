@@ -232,11 +232,13 @@ object (o : 'self)
   val tyvar_map : tyvar_map = initial_map
   val subkind_env : Types.subkind_environment = subkind_env
 
+  method private get_subkind_env = subkind_env
 
   (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
-  method ensure_kinded pos ((name : string), (kind : SugarKind.t), (freedom : Freedom.t) as v) =
+  method ensure_kinded : 'a. subkind_env: Types.subkind_environment -> SourceCode.Position.t -> 
+    string * SugarKind.t * Freedom.t -> 'self * (string * SugarKind.t * Freedom.t) =
+  fun ~subkind_env pos ((name, kind, freedom) as v) ->
   let open SugarKind in
-  (*let subkinds =  in*)
   match kind with
   (** Catches ::Numeric, a named subkind,
     as opposed to defined by linearity and restriction *)
@@ -284,9 +286,7 @@ object (o : 'self)
   | KUnresolved _ ->
     failwith "failed to resolved subkind; this shouldn't happen"
 
-  | KResolved _ -> 
-      o, (name, kind, freedom)
-
+  | KResolved _ -> o, v
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
@@ -309,6 +309,8 @@ object (o : 'self)
   method get_toplevelness = at_toplevel
 
   method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars >}
+
+  method set_subkind_env subkind_env = {< subkind_env >}
 
 
 
@@ -345,7 +347,7 @@ object (o : 'self)
   method add ?pos name (kind : SugarKind.t) ?(is_eff=false) freedom : 'self * SugarTypeVar.t =
     let anon = is_anonymous_name name in
     let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
-    let o, (_, kind, _) = o#ensure_kinded pos (name, kind, freedom) in
+    let o, (_, kind, _) = o#ensure_kinded pos ~subkind_env (name, kind, freedom) in
     let pk = OptionUtils.from_option pk_type (SugarKind.get_resolved_pk_exn kind) in
     let sk = SugarKind.get_resolved_sk_exn kind in
     if not anon && StringMap.mem name tyvar_map then
@@ -404,16 +406,17 @@ object (o : 'self)
       ty
 
 
-  (**  Used for Forall and Typenames *)
-  method quantified : 'a. rigidify:bool -> SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
-    fun ~rigidify unresolved_qs action ->
+  (**  Used for Forall, Typenames and Class declarations *)
+  method quantified : 'a. subkind_env: Types.subkind_environment -> rigidify:bool -> 
+    SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
+    fun ~subkind_env ~rigidify unresolved_qs action ->
     let original_o = o in
     let bind_quantifier (o, names) sq =
       let (name, _, _) as v =
         SugarQuantifier.get_unresolved_exn sq in
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let o, (_, kind, freedom) = o#ensure_kinded pos v in
+      let o, (_, kind, freedom) = o#ensure_kinded ~subkind_env pos v in
       let pk = SugarKind.get_resolved_pk_exn kind in
       let sk = SugarKind.get_resolved_sk_exn kind in
       let freedom = if rigidify then `Rigid else freedom in
@@ -451,7 +454,7 @@ object (o : 'self)
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
-       let o, resolved_qs, body = o#quantified ~rigidify:false unresolved_qs (fun o' -> o'#datatype body) in
+       let o, resolved_qs, body = o#quantified ~subkind_env ~rigidify:false unresolved_qs (fun o' -> o'#datatype body) in
        o, Forall (resolved_qs, body)
 
     | Mu (stv, t) ->
@@ -519,7 +522,7 @@ object (o : 'self)
          let o = o#set_toplevelness prev_at_toplevel in
          o, p
        in
-       let (o, new_tyvars, new_phrase) = o#quantified ~rigidify:true tyvars handle_tabstr in
+       let (o, new_tyvars, new_phrase) = o#quantified ~subkind_env ~rigidify:true tyvars handle_tabstr in
        o, SourceCode.WithPos.with_node p (TAbstr (new_tyvars, new_phrase))
     | _ -> super#phrase p
 
@@ -592,7 +595,7 @@ object (o : 'self)
     (* Aliases must never use type variables from an outer scope *)
     let o = o#reset_vars in
 
-    let o, resolved_qs, body = o#quantified ~rigidify:true unresolved_qs (fun o' -> o'#aliasbody body) in
+    let o, resolved_qs, body = o#quantified ~subkind_env ~rigidify:true unresolved_qs (fun o' -> o'#aliasbody body) in
 
     let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
     let o = o#set_vars tyvar_map in
@@ -640,8 +643,25 @@ object (o : 'self)
        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        (o, b)
     | Class {class_binder; class_tyvar; class_methods} ->
+      Debug.print "Running DesugarTypeVariables";
 
-      (*let name = Binder.to_name class_binder in
+      let implicits_allowed =
+        match class_methods with
+        | [] ->
+          Debug.print "Warning: Empty class methods list";
+          false
+          | (_, dt)::_ -> 
+            try 
+              sig_allows_implicitly_bound_vars (Some dt)
+            with exn ->
+              Debug.print ("Warning: Error checking implicit vars: " ^ Printexc.to_string exn);
+              false
+      in
+
+      let o = o#set_allow_implictly_bound_vars implicits_allowed in
+      let o, class_binder = o#binder class_binder in
+
+      let name = Binder.to_name class_binder in
 
       Restriction.add name (fun r1 r2 ->
         match (r1, r2) with
@@ -649,64 +669,110 @@ object (o : 'self)
         | name, "Mono" | "Mono", name -> Some name (* HACK: find a better way of going about this? *)
         | _ -> None
       );
-      Debug.print ("Adding restriction " ^ name);
+      Debug.print ("Adding restriction: " ^ name);
+
+       (* First handle empty class_tyvar case *)
+      (* TODO: assumes kind is unresolved, not true in the case ::Type, *)
+      let class_tyvar_info = 
+        try
+          match class_tyvar with
+          | [] -> []
+          | _ ->
+            List.map (fun q ->
+              try
+                let (tyvar_name, kind, fd) = SugarQuantifier.get_unresolved_exn q in
+                let (pk, lin, _res) = SugarKind.get_unresolved_exn kind in
+                let fixed_kind = SugarKind.mk_unresolved pk (lin, Some (Binder.to_name class_binder)) in
+                (pk, lin, SugarQuantifier.mk_unresolved tyvar_name fixed_kind fd)
+              with exn ->
+                Debug.print ("Warning: Error processing quantifier: " ^ Printexc.to_string exn);
+                (None, Some lin_any, q) (* Fallback with default values *)
+          ) class_tyvar
+        with exn ->
+          Debug.print ("Warning: Error processing class tyvars: " ^ Printexc.to_string exn);
+          []
+      in
+
+      (* Determine primary kind - handle empty case *)
+      let pk = 
+        try
+          match class_tyvar_info with
+          | [] -> None
+          | _ -> 
+            let pks = List.map (fun (pk, _, _) -> pk) class_tyvar_info in
+            match ListUtils.find_fstdiff pks with
+            | Some k -> 
+              (match k with
+              | Some kk -> failwith ("Must be of all same kind: " ^ PrimaryKind.to_string kk)
+              | _ -> failwith "bad")
+              | None -> 
+                try List.hd pks 
+                with Not_found -> None        
+        with exn ->
+          Debug.print ("Warning: Error determining primary kind: " ^ Printexc.to_string exn);
+          None      
+      in
+
+      let mutual_env = 
+        match pk with 
+        | Some k -> SEnv.bind name (`Class ((k, (lin_any, name)), [], [])) subkind_env 
+        | None -> SEnv.bind name (`Class ((pk_type, (lin_any, name)), [], [])) subkind_env 
+      in
+  
+      let class_tyvar = 
+        match class_tyvar_info with
+        | [] -> []
+        | _ -> List.map (fun (_, _, q) -> q) class_tyvar_info
+      in
 
 
-      (* TODO: create constraint here *)
-
-      Debug.print ("Creating constraint " ^ name);
-
-      let updated_qs = List.map (fun q ->
-          let (n, k, f) = SugarQuantifier.get_unresolved_exn q in
-          let (nam, pk, sk, lin, _) = SugarKind.get_unresolved_exn k in
-          let new_kind = SugarKind.mk_resolved pk (Some (lin_any, name)) in
-          (SugarQuantifier.mk_unresolved n new_kind f)
-        ) class_tyvar in *)
-
-      (*let o, class_binder = o#binder class_binder in
-
-      let o, class_tyvar, class_methods = 
-        o#quantified ~rigidify:true class_tyvar (fun o' -> 
-          o'#list (fun o (b, (dt : datatype')) ->
-            let handle (o, b, dt) =
-              let o, b = o#binder b in
-              let o, dt = o#datatype' dt in (* Ensure dt is resolved *)
-              o, (b, dt)
-            in
-
-            let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
-            let o = o#set_allow_implictly_bound_vars implicits_allowed in
-            let o = o#set_toplevelness false in
-            let o, (b, dt) = apply handle (o, b, dt) in
-            let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
-            (o, (b, dt)) (* Explicitly pair b with the resolved dt *)
-          ) class_methods
-        )    
+      (*(* Add all class declaration to the subkind
+       * environment, as mutuals. *)
+      let ((mutual_env : Types.subkind_environment)), class_tyvar = 
+        let (class_tyvar_info) = 
+          List.map (fun q ->
+            let (tyvar_name, kind, fd) = SugarQuantifier.get_unresolved_exn q in
+            let (pk, lin, _res) = SugarKind.get_unresolved_exn kind in
+            let fixed_kind = SugarKind.mk_unresolved pk (lin, Some name) in
+            (pk, lin, SugarQuantifier.mk_unresolved tyvar_name fixed_kind fd)
+          ) class_tyvar 
+        in
       in*)
+  
+      (* To simulate the legacy scoping behavior, we traverse the signature before the body *)
+      (*let o, class_tyvar = o#list (fun o -> o#quantifier) class_tyvar in
+      let o, class_methods =  o#list (fun o (b, (dt : datatype')) ->
+        let handle (o, b, dt) =
+          let o, b = o#binder b in
+          let o, dt = o#datatype' dt in (* Ensure dt is resolved *)
+          o, (b, dt)
+        in
 
+        let o, (b, dt) = apply handle (o, b, dt) in
+        (o, (b, dt)) (* Explicitly pair b with the resolved dt *)  
+      ) class_methods
+
+      in  *)
+
+      (* Process the class *)
+      let o, class_tyvar, class_methods = 
+      o#quantified ~rigidify:true ~subkind_env:mutual_env class_tyvar (fun o' -> 
+        o'#list (fun o (b, dt) ->
+          let o, b = o#binder b in
+          let o, dt = o#datatype' dt in (* Ensure dt is resolved *)
+          o, (b, dt)
+        ) class_methods
+      )
+      in
+
+      let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+      let o = o#set_vars tyvar_map in
+      let o = o#set_subkind_env mutual_env in
+
+      Debug.print "Leaving DesugarTypeVariables";
       (o, Class {class_binder; 
                   class_tyvar; 
                   class_methods})
-    (*| ClassMethod method' ->
-      let handle (o, b, dt) =
-        let o, b = o#binder b in
-        let o, dt = o#datatype' dt in
-        o, (b, dt)
-      in
-      let o, methods =
-      (* (Binder.with_pos * datatype') list *)
-      o#list
-        (fun o (b, (dt : datatype')) ->
-          let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
-          let o = o#set_allow_implictly_bound_vars implicits_allowed in
-          let o = o#set_toplevelness false in
-          let o, (b, dt) = apply handle (o, b, dt) in
-          let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
-          o, (b, dt))
-        (ClassMethod.methods method')
-    in
-    let o, kind = o#kind (ClassMethod.kind method') in
-    o, ClassMethod (ClassMethod.modify ~methods ~kind method')*)
     | Foreign alien ->
        (* For alien bindings, signature determines whether implicitly
           bound vars are allowed *)

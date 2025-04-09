@@ -563,6 +563,62 @@ module type Constraint = sig
   val make_type : typ -> unit
   val make_row : row -> unit
 end
+(*
+module DynamicConstraint = struct
+  module type CONSTRAINT_CONFIG = sig
+    val name : string
+    val initial_types : Primitive.t list
+  end
+
+  module Make (Config : CONSTRAINT_CONFIG) : Constraint = struct
+    open Restriction
+    open Primitive
+
+    let allowed_primitives = ref Config.initial_types
+
+    let update_allowed_primitives prims = allowed_primitives := prims
+    let get_allowed_primitives () = !allowed_primitives
+
+    module Predicate = struct
+      class klass = object
+        inherit type_predicate as super
+
+        method! point_satisfies f vars point =
+          match Unionfind.find point with
+          | Recursive _ -> false
+          | _ -> super#point_satisfies f vars point
+
+        method! type_satisfies vars = function
+          | Not_typed -> assert false
+          | Var _ | Recursive _ | Closed ->
+             failwith "freestanding Var/Recursive/Closed not implemented yet"
+          | Alias _ as t -> super#type_satisfies vars t
+          | (Application _ | RecursiveApplication _) -> false
+          | Meta _ as t -> super#type_satisfies vars t
+          | Primitive p -> List.mem p !allowed_primitives
+          | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+          | ForAll ([], t) -> super#type_satisfies vars t
+          | Effect _ as t -> super#type_satisfies vars t
+          | Operation _ -> failwith "Operation not implemented"
+          | Row _ as t -> super#type_satisfies vars t
+          | Absent -> true
+          | Present _ as t -> super#type_satisfies vars t
+          | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
+      end
+    end
+
+    let type_satisfies, row_satisfies = 
+      make_restriction_predicate (module Predicate) Config.name false
+    let can_type_be, can_row_be = 
+      make_restriction_predicate (module Predicate) Config.name true
+    let make_type, make_row = 
+      make_restriction_transform Config.name
+
+
+  end
+
+end
+*)
 
 module ConstraintRegistry = struct
   

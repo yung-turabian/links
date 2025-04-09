@@ -1410,10 +1410,9 @@ struct
                       qs,
                         fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e
                     )*)
-                | Aliases _
                 | Class _
+                | Aliases _
                 | Instance _
-                (*| ClassMethod _*)
                 | Infix _ ->
                     (* Ignore type alias, infix declarations and class/instances - they
                        shouldn't be needed in the IR *)
@@ -1481,11 +1480,6 @@ struct
                  let f = Var.var_of_binder alien_binder in
                  let f_name = Var.name_of_binder alien_binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
-              (*| ClassMethod { method_binder; _ }
-                 when Var.Scope.is_global (Var.scope_of_binder method_binder) ->
-               let f = Var.var_of_binder method_binder in
-               let f_name = Var.name_of_binder method_binder in
-               partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs*)
               | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in

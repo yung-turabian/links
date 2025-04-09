@@ -104,12 +104,13 @@ type module_info = {
     simple_name : string; (* Note: not fully-qualified *)
     inner_modules : string list;
     type_names : string list;
+    subkind_names : string list;
     decl_names : string list
   }
 
-let make_module_info simple_name inner_modules type_names decl_names =
+let make_module_info simple_name inner_modules type_names subkind_names decl_names =
   { simple_name = simple_name; inner_modules = inner_modules;
-    type_names = type_names; decl_names = decl_names }
+    type_names = type_names; subkind_names = subkind_names; decl_names = decl_names }
 
 let get_pat_vars () =
   object(self)
@@ -215,6 +216,13 @@ let create_module_info_map program =
                 ns @ (get_type_names bs)
             | _ -> get_type_names bs in
 
+    (* Getting subkind names *)
+    let rec get_subkind_names = function
+    | [] -> []
+    | { node = Class c; _ } :: bs ->
+        Binder.to_name c.class_binder :: get_binding_names bs
+    | _ :: bs -> get_subkind_names bs in
+
     (* Gets data constructors for variants *)
     let get_constrs bs = ((get_data_constructors StringSet.empty)#list
         (fun o -> o#binding) bs)#get_constrs in
@@ -226,9 +234,10 @@ let create_module_info_map program =
     let constrs = get_constrs other_bindings in
     let binding_names = get_binding_names other_bindings @ constrs in
     let type_names = get_type_names other_bindings in
+    let subkind_names = get_subkind_names other_bindings in
     (* Finally, construct the module info, and add to the table. *)
     let path_str = make_path_string parent_path name in
-    let mod_info = make_module_info name inner_module_names type_names binding_names in
+    let mod_info = make_module_info name inner_module_names type_names subkind_names binding_names in
     add_module_info path_str mod_info in
 
   (* Toplevel *)
@@ -240,6 +249,7 @@ let print_mod_info k mi =
    printf "MODULE: %s\n" k;
    printf "Inner modules: %s\n" (print_list mi.inner_modules);
    printf "Type names: %s\n" (print_list mi.type_names);
+   printf "Subkind names: %s\n" (print_list mi.subkind_names);
    printf "Decl names: %s\n" (print_list mi.decl_names)
 
 let _print_mt mt =

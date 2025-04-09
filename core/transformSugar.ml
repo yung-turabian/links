@@ -909,43 +909,67 @@ class transform (env : Types.typing_environment) =
                 | _ -> raise (internal_error "transformSugar.ml: unannotated type alias")
             ) ts in
           (o, Aliases ts)
-      | Class { class_binder; class_tyvar; class_methods } ->    
-        (*let name = Binder.to_name class_binder in
-        let qs = List.map (SugarQuantifier.get_resolved_exn) class_tyvar in
-        let method_binders = List.map fst (ClassMethod.methods class_methods) in
-        let method_names = List.map Binder.to_name method_binders in
+      | Class c ->    
+        Debug.print "Running TransformSugar";
 
-        (* Process class methods *)
-        let (o, methods) = 
-          listu o 
-            (fun o (b, dt) ->
-            let o, b = o#binder b in
-            let (o, dt) = o#datatype' dt in
-            o, (b, dt)) 
-            (ClassMethod.methods class_methods) 
-        in
-        
-        (* Defaults to restriction of its name *)
-        let o = o#bind_subkind name (`Class ( (pk_type, (lin_any, name)), qs, method_names ) ) in
-        *)
-        (o, Class { class_binder; class_tyvar; class_methods })
-      (*| ClassMethod method' ->
-        let (o, methods) =
-          listu o
-            (fun o (b, dt) ->
-              let o, b = o#binder b in
-              let o, dt = o#datatype' dt in
-              (o, (b, dt)))
-            (ClassMethod.methods method')
-        in
-        let o, kind = o#kind (ClassMethod.kind method') in
-        (o, ClassMethod (ClassMethod.modify ~kind ~methods method'))*)
-      (*| Instance i -> (o, Instance i)*)
+        (* Finally, construct a new subkind environment, and populate the map from
+        * strings to the desugared datatypes. *)
+        let o, transformed_class =
+          (fun o' { class_binder; class_tyvar; class_methods } ->
+              let name = Binder.to_name class_binder in
+              let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in
+              let pks = List.map (Quantifier.to_primary_kind) qs in
+              let sks = List.map (Quantifier.to_subkind) qs in
+              let pk, sk = match ListUtils.find_fstdiff pks with
+              | Some k -> 
+                raise (Errors.Type_error (WithPos.pos class_binder,
+                       "All type variables must be of same kind, found: " ^ 
+                       PrimaryKind.to_string k))
+              | None ->
+                  let pk = 
+                    match pks with (* Alteady checked in desugarTypeVariables *)
+                    | [] -> pk_type
+                    | _ -> List.hd pks 
+                  in
+                  let sk = 
+                    match sks with (* Alteady checked in desugarTypeVariables *)
+                    | [] -> CommonTypes.default_subkind
+                    | _ -> List.hd sks 
+                  in
+                  (pk, sk)
+              in
+              let method_binders = List.map fst class_methods in
+              let method_names = List.map Binder.to_name method_binders in
+              let method_dts = List.map snd class_methods in
+              let method_typs = List.map snd method_dts in
+              let method_tys = List.map val_of method_typs in
+              let method_binders_typed = List.map2 Binder.set_type method_binders method_tys in
+              List.iter2 (fun s t -> Debug.print ("\t" ^ s ^ " : " ^ Types.string_of_datatype t)) method_names method_tys;
 
+              let class_methods = zip method_binders_typed method_dts in
+
+              (* Process class methods *)
+              let (o', class_methods) = 
+                listu o' 
+                  (fun o' (b, dt) ->
+                    let (o', dt) = o'#datatype' dt in
+                    let o', b = o'#binder b in
+                    o', (b, dt)) 
+                  class_methods
+              in
+              (* Defaults to restriction of its name, TODO: actually get kind, lin, res *)
+              let o' = o'#bind_subkind name (`Class ( (pk, sk), qs, method_names ) ) in
+              o', { class_binder; class_tyvar; class_methods }
+          ) o c 
+        in
+        Debug.print "Leaving TransformSugar";
+        (o, Class transformed_class)
+      | Instance i ->
+
+        (o, Instance i)
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
-      | Instance _
       | AlienBlock _
       | Module _
       | Import _

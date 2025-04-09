@@ -465,15 +465,17 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            in
            Aliases ts''
       | Class { class_binder; class_tyvar; class_methods } ->
-        (*let methods' = 
+        Debug.print "Running DesugarModules";
+        let class_binder = self#binder class_binder in
+        let class_methods = 
           self#list
             (fun o (bndr, dt) ->
               let dt' = o#datatype' dt in
               let bndr' = o#binder bndr in
               (bndr', dt'))
-            ClassMethod.(methods class_methods)
+            class_methods
         in
-        let class_binder = self#binder class_binder in*)
+        Debug.print "Leaving DesugarModules";
         Class {class_binder; 
                 class_tyvar; 
                 class_methods }

@@ -1,11 +1,28 @@
 infixl 6 +;
 #infixl 7 *;
 
+typename Nat = [|Zero|Succ:Nat|];
+
 # In this case the operator + takes on the kind Numeric.
 class Num : (a) {
 		sig + : (a, a) -> a;
-#		sig * : (a, a) -> a;
 }
+
+instance Num : Int {
+		+ : addInt;
+}
+
+op m + n {
+		n
+}
+
+#sig test : (a::Num) -> a
+#fun test(x) { x }
+
+#test(2)
+
+2 + 2
+
 
 # Sees that + is already defined with a kind signature, now has
 # to update the signature to refelect a wider quantifier.
@@ -24,10 +41,7 @@ class Num : (a) {
 
 # Updates the constraint associated with the restriction "Numeric" to 
 # accept of type Int.
-#instance Num : Int {
-#		+ : addInt;
-		#negate : negInt;
-#}
+
 
 #instance Num : Float {
 #		negate : negFloat;
@@ -37,3 +51,4 @@ class Num : (a) {
 #fun square(x) {
 #		x * x
 #}
+

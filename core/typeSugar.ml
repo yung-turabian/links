@@ -154,7 +154,6 @@ struct
     | Open _
     | AlienBlock _
     | Class _
-    (*| ClassMethod _*)
     | Instance _
     | Module _
     | Fun _
@@ -5241,10 +5240,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           (Aliases ts, env, Usage.empty)
       (** [subkind_binding] case for Subkind Classes *)
       | Class {class_binder; class_tyvar; class_methods} ->
+        Debug.print "Running TypeSugar";
 
-          (*let methods =
+          let methods =
             List.map (fun (bndr, dt') ->
-              let dt, datatype =
+              let _dt, datatype =
                 match dt' with
                 | (dt, Some datatype) -> (dt, datatype)
                 | _ -> assert false
@@ -5253,22 +5253,31 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               let datatype = Instantiate.freshen_quantifiers datatype in
               let bndr = Binder.set_type bndr datatype in
               (bndr, dt')
-            ) (ClassMethod.methods class_methods) in
+            ) class_methods in
         
           let env = (fun env (class_binder, class_tyvar, class_methods) ->
             let name = Binder.to_name class_binder in
             let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in  
-            let kinds = List.map (Quantifier.to_primary_kind) qs in
-            let pk_naive = List.hd kinds in
+            let pks = List.map (Quantifier.to_primary_kind) qs in
+            let pk = 
+              match pks with (** Already checked in desugarTypeVariables, as with {sks} *)
+              | [] -> pk_type
+              | _ -> List.hd pks 
+            in
+            let sks = List.map (Quantifier.to_subkind) qs in
+            let sk = 
+              match sks with
+              | [] -> CommonTypes.default_subkind
+              | _ -> List.hd sks 
+            in
             let method_binders = List.map fst class_methods in
             let methods_name = List.map Binder.to_name method_binders in
 
-            
             (* Defaults to restriciton of its own name *)
-            let ctx = bind_subkind env (name, `Class ((pk_naive, (lin_any, name)), qs, methods_name))
+            let ctx = bind_subkind env (name, `Class ((pk, sk), qs, methods_name))
             in
             List.fold_left (fun env (bndr, dt') ->
-              let dt, datatype =
+              let _dt, datatype =
                 match dt' with
                 | (dt, Some datatype) -> (dt, datatype)
                 | _ -> assert false
@@ -5277,10 +5286,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               bind_var env (Binder.to_name bndr, datatype)
             ) ctx class_methods
             
-
-          ) empty_context (class_binder, class_tyvar, methods) in*)
+          ) empty_context (class_binder, class_tyvar, methods) in
           
-          (Class {class_binder; class_tyvar; class_methods}, empty_context, Usage.empty)
+          Debug.print "Leaving TypeSugar";
+          (Class {class_binder; class_tyvar; class_methods}, env, Usage.empty)
+      | Instance i ->
+
+        (Instance i, empty_context, Usage.empty)
       (*| ClassMethod method' ->
         let binder, dt, datatype =
            match ClassMethod.method' method' with

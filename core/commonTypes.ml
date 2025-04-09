@@ -169,7 +169,6 @@ end
 let default_subkind : Subkind.t = (lin_unl, res_any)
 let any_subkind : Subkind.t = (lin_any, res_any)
 
-(* NOTE: adopted from sugartypes.ml *)
 (* NOTICE: `lin_any` here means this eff_row_var can be unified with
     linear or unlimited row types *)
 

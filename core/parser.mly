@@ -534,14 +534,12 @@ proper_class:
 | CLASS CONSTRUCTOR COLON typeargs_opt 
   LBRACE class_datatypes RBRACE                                { class_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) $4 $6 }
 
-// TODO: Consider later, just plain subkind declarations as a user feature, currently only possible
-// internally.
-(*subkind_decl:
-| CLASS CONSTRUCTOR SEMICOLON                                  { class_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) [] [] }*)
+subkind_decl:
+| CLASS CONSTRUCTOR SEMICOLON                                  { class_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) [] [] }
 
 class_declaration:
 | proper_class                                                 { $1 }
-(*| subkind_decl                                                 { $1 }*)
+| subkind_decl                                                 { $1 }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
