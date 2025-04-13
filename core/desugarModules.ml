@@ -464,21 +464,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              ts' []
            in
            Aliases ts''
-      | Class { class_binder; class_tyvar; class_methods } ->
-        Debug.print "Running DesugarModules";
-        let class_binder = self#binder class_binder in
-        let class_methods = 
-          self#list
-            (fun o (bndr, dt) ->
-              let dt' = o#datatype' dt in
-              let bndr' = o#binder bndr in
-              (bndr', dt'))
-            class_methods
-        in
-        Debug.print "Leaving DesugarModules";
-        Class {class_binder; 
-                class_tyvar; 
-                class_methods }
       | Val (pat, (tvs, body), loc, dt) ->
        (* It is important to process [body] before [pat] to avoid
           inadvertently bringing the binder(s) in [pat] into the
@@ -507,16 +492,16 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              Alien.(declarations aliendecls)
          in
          AlienBlock (Alien.modify ~declarations:decls' aliendecls)
-      (*| ClassMethod method' ->
-        let methods =
+      | Class c ->
+        let funs' =
           self#list
             (fun o (b, dt) ->
               let dt = o#datatype' dt in
               let b = o#binder b in
               (b, dt))
-            (ClassMethod.methods method')
+            (Class.funs c)
         in
-        ClassMethod (ClassMethod.modify ~methods method')*)
+        Class (Class.modify ~funs:funs' c)
       | Infix { name; assoc; precedence } ->
          Infix { name = self#fixity name; assoc; precedence }
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
@@ -563,6 +548,7 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in
+  let program = DesugarSubkindClasses.transform_subkind_classes program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
   let desugar = desugar ~toplevel:true renamer' scope' in
@@ -576,6 +562,7 @@ let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   = fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
   let sentence = DesugarAlienBlocks.sentence sentence in
+  let sentence = DesugarSubkindClasses.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result

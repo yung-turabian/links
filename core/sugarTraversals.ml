@@ -773,6 +773,16 @@ class map =
          in
          let language = o#foreign_language (Alien.language alien) in
          Foreign (Alien.modify ~declarations ~language alien)
+      | ClassFun f -> 
+        let funs =
+          o#list
+            (fun o (b, dt) ->
+              let b = o#binder b in
+              let dt = o#datatype' dt in
+              (b, dt))
+            (Class.funs f)
+        in
+        ClassFun (Class.modify ~funs f)
       | Import { pollute; path } ->
          Import { pollute; path = o#list (fun o -> o#name) path }
       | Open _xs ->
@@ -781,18 +791,18 @@ class map =
       | Aliases ts ->
           let _x = o#list (fun o -> o#alias) ts in
           Aliases _x
-      (*| ClassMethod method' ->
-        let methods =
+      | Class c ->
+        let funs =
           o#list
           (fun o (b, dt) ->
             let b = o#binder b in
             let dt = o#datatype' dt in
             (b, dt))
-          (ClassMethod.methods method')
+          (Class.funs c)
         in
-        let kind = o#kind (ClassMethod.kind method') in
-        ClassMethod (ClassMethod.modify ~methods ~kind method')*)
-      | Class c -> Class (o#subkind_class_definition c)
+        let name = o#name (Class.name c) in
+        let quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        Class (Class.modify ~name ~quantifiers ~funs c)
       | Instance i -> Instance (o#instance_definition i)
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
@@ -834,24 +844,23 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#aliasnode p
 
-    method subkind_class_definition : subkind_class_definition -> subkind_class_definition 
-      = fun { class_binder;
-              class_tyvar;
+    (*method subkind_class_definition : subkind_class_definition -> subkind_class_definition 
+      = fun { class_name;
+              class_tyvars;
               class_methods} ->
-      let class_binder = o#binder class_binder in
-      let class_tyvar = o#list (fun o -> o#quantifier) class_tyvar in
+      let class_name = o#name class_name in
+      let class_tyvars = o#list (fun o -> o#quantifier) class_tyvars in
       let class_methods = 
         o#list 
           (fun o (b, dt) ->
-            let b = o#binder b in
+            let b = o#name b in
             let dt = o#datatype' dt in
             (b, dt))
           class_methods
       in
-      let class_methods = class_methods in
-      { class_binder;
-        class_tyvar;
-        class_methods }
+      { class_name;
+        class_tyvars;
+        class_methods }*)
 
     method instance_definition : instance_definition -> instance_definition 
       = fun { instance_binder;
@@ -1605,6 +1614,12 @@ class fold =
              (Alien.declarations alien)
          in
          o#foreign_language (Alien.language alien)
+      | ClassFun f -> 
+          o#list
+            (fun o (b, dt) ->
+              let o = o#binder b in
+              o#datatype' dt)
+            (Class.funs f)
       | Import { path; _ } ->
          let o = o#list (fun o -> o#name) path in
           o
@@ -1627,16 +1642,13 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
-      (*| ClassMethod method' ->
-        let o =
-          o#list
+      | Class c ->
+        let o = o#name (Class.name c) in
+        let o = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        o#list
           (fun o (b, dt) ->
-            let o = o#binder b in
-            o#datatype' dt)
-          (ClassMethod.methods method')
-        in
-        o#kind (ClassMethod.kind method')*)
-      | Class c -> o#subkind_class_definition c
+            let o = o#binder b in o#datatype' dt)
+          (Class.funs c)
       | Instance i -> o#instance_definition i
     method binding : binding -> 'self_type =
       WithPos.traverse
@@ -1666,20 +1678,20 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#aliasnode v)
 
-    method subkind_class_definition : subkind_class_definition -> 'self
-      = fun { class_binder;
-              class_tyvar;
+    (*method subkind_class_definition : subkind_class_definition -> 'self
+      = fun { class_name;
+              class_tyvars;
               class_methods;
             } ->
-          let o = o#binder class_binder in
-          let o = o#list (fun o -> o#quantifier) class_tyvar in
+          let o = o#name class_name in
+          let o = o#list (fun o -> o#quantifier) class_tyvars in
           let o = o#list 
             (fun o (b, dt) ->
-              let o = o#binder b in
+              let o = o#name b in
               o#datatype' dt)
             class_methods
           in
-          o
+          o*)
 
     method instance_definition : instance_definition -> 'self
     = fun { instance_binder;
@@ -2587,6 +2599,16 @@ class fold_map =
          in
          let o, language = o#foreign_language (Alien.language alien) in
          o, Foreign (Alien.modify ~declarations ~language alien)
+      | ClassFun f -> 
+        let o, funs =
+          o#list
+            (fun o (b, dt) ->
+              let o, b = o#binder b in
+              let o, dt = o#datatype' dt in
+              o, (b, dt))
+            (Class.funs f)
+        in
+        o, ClassFun (Class.modify ~funs f)
       | Import { pollute; path } ->
           let (o, path') = o#list (fun o n -> o#name n) path in
           (o, Import { pollute; path = path' })
@@ -2604,18 +2626,18 @@ class fold_map =
           let (o, module_binder) = o#binder module_binder in
           let (o, module_members) = o#list (fun o -> o#binding) module_members in
           (o, (Module { module_binder; module_members }))
-      (*| ClassMethod method' ->
-        let o, methods =
+      | Class c ->
+        let o, name = o#name (Class.name c) in
+        let o, quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
+        let o, funs =
           o#list
           (fun o (b, dt) ->
             let o, b = o#binder b in
             let o, dt = o#datatype' dt in
             o, (b, dt))
-          (ClassMethod.methods method')
+          (Class.funs c)
         in
-        let o, kind = o#kind (ClassMethod.kind method') in
-        o, ClassMethod (ClassMethod.modify ~methods ~kind method')*)
-      | Class c -> let o, c = o#subkind_class_definition c in o, Class c
+        o, Class (Class.modify ~name ~quantifiers ~funs c)
       | Instance i -> let o, i = o#instance_definition i in o, Instance i
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
@@ -2658,23 +2680,23 @@ class fold_map =
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
         | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
 
-    method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
-      = fun { class_binder;
-              class_tyvar;
+    (*method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
+      = fun { class_name;
+              class_tyvars;
               class_methods
             } ->
-          let o, class_binder = o#binder class_binder in
-          let o, class_tyvar = o#list (fun o -> o#quantifier) class_tyvar in
+          let o, class_name = o#name class_name in
+          let o, class_tyvars = o#list (fun o -> o#quantifier) class_tyvars in
           let o, class_methods = o#list
               (fun o (b, dt) ->
-                let o, b = o#binder b in
+                let o, b = o#name b in
                 let o, dt = o#datatype' dt in
                 o, (b, dt))
               class_methods
           in
-          (o, { class_binder;
-                class_tyvar;
-                class_methods})
+          (o, { class_name;
+                class_tyvars;
+                class_methods})*)
 
 
     method instance_definition : instance_definition -> 'self * instance_definition

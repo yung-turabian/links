@@ -1242,6 +1242,32 @@ class main_traversal simple_tycon_env =
 
           let ts' = List.map traverse_body ts in
           ({<tycon_env>}, Aliases ts')
+      (*| Class c as b -> 
+        Debug.if_set (CommonTypes.show_subkindclasses)
+          (fun () -> ("Entering desugarEffects"));
+        
+        let implicits_allowed =
+          match c.class_methods with
+          | [] ->
+            Debug.print "Empty class methods list";
+            false
+          | (_, dt)::_ -> 
+            try 
+              DesugarTypeVariables.sig_allows_implicitly_bound_vars (Some dt)
+            with exn ->
+              Debug.print ("Warning: Error checking implicit vars: " ^ Printexc.to_string exn);
+              false
+        in
+
+        let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+        let o, b = o#super_bindingnode b in
+
+        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+        Debug.if_set (CommonTypes.show_subkindclasses)
+        (fun () -> ("Exiting desugarEffects"));
+        (o, b)*)
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype

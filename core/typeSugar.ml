@@ -153,6 +153,7 @@ struct
     | Import _
     | Open _
     | AlienBlock _
+    | ClassFun _
     | Class _
     | Instance _
     | Module _
@@ -1997,6 +1998,7 @@ let datatype subkinds aliases = Instantiate.typ -<- DesugarDatatypes.read ~subki
 let add_usages (p, t) m = (p, t, m)
 let add_empty_usages (p, t) = (p, t, Usage.empty)
 
+(* TODO: Retrieves polymorphic operators as well.*)
 let type_unary_op pos env =
   let open UnaryOp in
   let datatype = datatype env.subkind_env env.tycon_env  in
@@ -3695,18 +3697,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
         (* applications of various sorts *)
         | UnaryAppl ((_, op), p) ->
-            let tyargs, opt, op_usage = type_unary_op pos context op
-            and p = tc p
-            and rettyp = Types.fresh_type_variable (lin_any, res_any) in
-              unify ~handle:Gripers.unary_apply
-                ((UnaryOp.to_string op, opt),
-                 no_pos (T.Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
-              UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage
+          let open UnaryOp in
+          let tyargs, opt, op_usage = type_unary_op pos context op in
+          let (_, t, _) as p = tc p
+          and rettyp = Types.fresh_type_variable (lin_any, res_any) in
+            unify ~handle:Gripers.unary_apply
+              ((to_string op, opt),
+                no_pos (T.Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
+            UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage
         | InfixAppl ((_, op), l, r) ->
             let tyargs, opt, op_usages = type_binary_op pos context op in
-            let l = tc l
-            and r = tc r
+            Debug.print ("OP: " ^ (BinaryOp.to_string op) ^ " " ^ (Types.string_of_datatype opt));
+            let (_, t1, _) as l = tc l
+            and (_, t2, _) as r = tc r
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
+              Debug.print ("Operating on " ^ (Types.string_of_datatype t1) ^ (Types.string_of_datatype t2));
               unify ~handle:Gripers.infix_apply
                 ((BinaryOp.to_string op, opt),
                  no_pos (T.Function (Types.make_tuple_type [typ l; typ r],
@@ -4850,8 +4855,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
                   let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
-
-                  (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
+                  
+                   (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
                   let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos ft_mono) in
                     (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
                   (* HACK: Place a dummy name in the environment in
@@ -5238,25 +5243,37 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 | _ -> raise (internal_error "typeSugar.ml: unannotated type alias")
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)
+      | ClassFun f ->
+        let binder, dt, datatype =
+          match Class.fun' f with
+          | (b, (dt, Some datatype)) -> (b, dt, datatype)
+          | _ -> assert false
+        in
+        let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
+        let datatype = Instantiate.freshen_quantifiers datatype in
+        let binder = Binder.set_type binder datatype in
+        ( ClassFun (Class.modify ~funs:[(binder, (dt, Some datatype))] f)
+        , bind_var empty_context ((Binder.to_name binder), datatype)
+        , Usage.empty )
       (** [subkind_binding] case for Subkind Classes *)
-      | Class {class_binder; class_tyvar; class_methods} ->
-        Debug.print "Running TypeSugar";
+      (*| Class { class_name; class_tyvars; class_methods } ->
 
-          let methods =
+          Debug.if_set (CommonTypes.show_subkindclasses)
+            (fun () -> ("Entering typeSugar"));
+
+          let class_methods =
             List.map (fun (bndr, dt') ->
               let _dt, datatype =
                 match dt' with
                 | (dt, Some datatype) -> (dt, datatype)
                 | _ -> assert false
               in
-              let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-              let datatype = Instantiate.freshen_quantifiers datatype in
-              let bndr = Binder.set_type bndr datatype in
+              let (_tyvars, _args), _datatype = Utils.generalise context.var_env datatype in
               (bndr, dt')
             ) class_methods in
         
-          let env = (fun env (class_binder, class_tyvar, class_methods) ->
-            let name = Binder.to_name class_binder in
+          let env = (fun env (class_name, class_tyvar, class_methods) ->
+
             let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in  
             let pks = List.map (Quantifier.to_primary_kind) qs in
             let pk = 
@@ -5271,10 +5288,9 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | _ -> List.hd sks 
             in
             let method_binders = List.map fst class_methods in
-            let methods_name = List.map Binder.to_name method_binders in
 
             (* Defaults to restriciton of its own name *)
-            let ctx = bind_subkind env (name, `Class ((pk, sk), qs, methods_name))
+            let ctx = bind_subkind env (class_name, `Class ((pk, sk), qs, method_binders))
             in
             List.fold_left (fun env (bndr, dt') ->
               let _dt, datatype =
@@ -5283,29 +5299,20 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 | _ -> assert false
               in
 
-              bind_var env (Binder.to_name bndr, datatype)
+              bind_var env (bndr, datatype)
             ) ctx class_methods
+
+            (*bind_subkind env (class_name, `Class ((pk, sk), qs, method_binders))*)
             
-          ) empty_context (class_binder, class_tyvar, methods) in
+          ) empty_context (class_name, class_tyvars, class_methods) in
           
-          Debug.print "Leaving TypeSugar";
-          (Class {class_binder; class_tyvar; class_methods}, env, Usage.empty)
+          Debug.if_set (CommonTypes.show_subkindclasses)
+            (fun () -> ("Exiting typeSugar"));
+
+          (Class { class_name; class_tyvars; class_methods }, env, Usage.empty)*)
       | Instance i ->
 
         (Instance i, empty_context, Usage.empty)
-      (*| ClassMethod method' ->
-        let binder, dt, datatype =
-           match ClassMethod.method' method' with
-           | (b, (dt, Some datatype)) -> (b, dt, datatype)
-           | _ -> assert false
-         in
-         (* Ensure that we quantify FTVs *)
-         let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-         let datatype = Instantiate.freshen_quantifiers datatype in
-         let binder = Binder.set_type binder datatype in
-        ( ClassMethod (ClassMethod.modify ~methods:[(binder, (dt, Some datatype))] method')
-        , bind_var empty_context (Binder.to_name binder, datatype)
-        , Usage.empty )*)
       (** [subkind_binding] case for Subkind Classes *)
       (*| Class {class_binder; class_tyvar; class_methods} ->
 
@@ -5445,13 +5452,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
+          let (_, typ, _) = e in
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
-      (*| ClassMethod _*)
-      | Instance _
       | Import _
       | Open _
+      | Class _
       | AlienBlock _
       | Module _ -> assert false
     in

@@ -1,0 +1,4 @@
+show_kinds=full
+prelude=dummy.links
+debug=true
+show_subkindclasses=true

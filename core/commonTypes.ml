@@ -2,6 +2,13 @@
    (Sugartypes) and typechecker (Types). *)
 
 open Utility
+open Graph
+
+let show_subkindclasses
+  = Settings.(flag "show_subkindclasses"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 
 module Name = struct
   type t = string
@@ -52,97 +59,112 @@ end
 let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
+(* TODO: Considering getting this information form subkind environment instead *)
 module Restriction = struct
-
   type t = string
-    [@@deriving eq,show]
-    
-  let restrictions : (t, (t -> t -> t option)) Hashtbl.t = Hashtbl.create 20
+  [@@deriving eq,show]
 
-  (* Add a new restriction dynamically *)
-  let add name min_func =
-    if Hashtbl.mem restrictions name then
-      failwith ("Restriction " ^ name ^ " already exists")
-    else
-      Hashtbl.add restrictions name min_func
-  
-  (* Get the min function for a restriction *)
-  let get_min_func name =
-    try Hashtbl.find restrictions name
-    with Not_found -> failwith ("Restriction " ^ name ^ " not found")
+  let graph : (t, t list) Hashtbl.t = Hashtbl.create 20
 
-  (* Compute the minimum of two restrictions 
-    TODO: pretty hacky and should rewrite *)
-  let min r1 r2 =
-    let min_func_r1 = get_min_func r1 in
-    let min_func_r2 = get_min_func r2 in
+  (* Initialize with default restrictions *)
+  let () =
+    (* Any is the most general restriction *)
+    Hashtbl.add graph "Any" [];
+    (* Mono is a child of Any *)
+    Hashtbl.add graph "Mono" ["Any"];
+    (* Base and Session are children of Mono *)
+    Hashtbl.add graph "Base" ["Mono"; "Any"];
+    Hashtbl.add graph "Session" ["Mono"; "Any"];
+    (* Effect is a direct child of Any *)
+    Hashtbl.add graph "Effect" ["Any"]
 
-    (* Try to find the minimum using r1's min function *)
-    match min_func_r1 r1 r2 with
-    | Some result -> Some result
-    | None ->
-      (* If r1's min function returns None, try using r2's min function *)
-      match min_func_r2 r2 r1 with
-      | Some result -> Some result
-      | None -> None
-  
-  (** TODO: Computer the smallest mutual restriction of the two. *)
-  let mut r1 r2 = r1
 
   (* Check if a restriction exists *)
-  let exists name : bool =
-    Hashtbl.mem restrictions name
+  let exists name = Hashtbl.mem graph name
+  
+  (* Find all descendants of a restriction (transitive closure) *)
+  let descendants r =
+    let rec collect acc current =
+      let all_children = 
+        Hashtbl.fold (fun child parents acc ->
+          if List.mem current parents then child::acc else acc
+        ) graph [] in
+      List.fold_left (fun acc child ->
+        if List.mem child acc then acc
+        else collect (child::acc) child
+      ) acc all_children
+    in
+    if exists r then collect [] r else []
+
+  (* Compute the minimum of two restrictions (most specific common ancestor) *)
+  let min r1 r2 =
+    if r1 = r2 then Some r1
+    else 
+      let ancestors_r1 = Hashtbl.find graph r1 in
+      let ancestors_r2 = Hashtbl.find graph r2 in
+      (* Find common ancestors and return the most specific one *)
+      let common = List.filter (fun a -> List.mem a ancestors_r2) ancestors_r1 in
+      match common with
+      | [] -> None
+      | _ -> 
+          (* Find the most specific common ancestor (minimum in the hierarchy) *)
+          List.fold_left (fun acc a ->
+            match acc with
+            | None -> Some a
+            | Some current ->
+                if List.mem current (Hashtbl.find graph a)
+                then Some current
+                else if List.mem a (Hashtbl.find graph current)
+                then Some a
+                else Some current
+          ) None common
+
+  (* Add a new restriction dynamically *)
+  let add ?(parents=["Any"]) name =
+    if exists name then
+      Debug.if_set (show_subkindclasses)
+        (fun () -> ("Restriction " ^ name ^ " already exists"))
+    else if List.for_all exists parents then
+      Hashtbl.replace graph name parents
+    else
+      Debug.if_set (show_subkindclasses)
+        (fun () -> ("Some parent restrictions not found"))
+
+  (* Get all restrictions in topological order (most general first) *)
+  let all_restrictions () =
+    let nodes = Hashtbl.fold (fun k _ acc -> k::acc) graph [] in
+    let edges = 
+      Hashtbl.fold (fun child parents acc ->
+        List.map (fun parent -> (child, parent)) parents @ acc
+      ) graph [] in
+    topological_sort nodes edges
+
+  (* Check if the graph is acyclic (should be true for restrictions) *)
+    let is_acyclic () =
+      let nodes = Hashtbl.fold (fun k _ acc -> k::acc) graph [] in
+      let edges = 
+        Hashtbl.fold (fun child parents acc ->
+          List.map (fun parent -> (child, parent)) parents @ acc
+        ) graph [] in
+      List.length (strongly_connected_components nodes edges) = List.length nodes
 
   (* Convert a restriction to its string representation *)
-  let to_string r : string = r
+  let to_string r = r
+
+   (* Visualization helper *)
+   let to_dot () =
+    let buf = Buffer.create 256 in
+    Buffer.add_string buf "digraph Restrictions {\n";
+    Buffer.add_string buf "  rankdir=BT;\n";  (* Bottom-to-top ranking *)
+    Hashtbl.iter (fun child parents ->
+      List.iter (fun parent ->
+        Buffer.add_string buf (Printf.sprintf "  \"%s\" <: \"%s\";\n" child parent))
+        parents
+    ) graph;
+    Buffer.add_string buf "}\n";
+    Buffer.contents buf
 
 end
-
-(* Default restrictions *)
-let () =
-  Restriction.add "Any" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Any", "Any" -> Some "Any"
-    | "Any", _ | _, "Any" -> Some r2 (* Any will narrow to anything. *)
-    | _ -> None
-  );
-
-  Restriction.add "Mono" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Mono", "Mono" -> Some "Mono"
-    | _ -> None
-  );
-
-  Restriction.add "Base" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Base", "Base" -> Some "Base"
-    | "Base", "Mono" | "Mono", "Base" -> Some "Base" (* Mono can narrow to Base. *)
-    | _ -> None
-  );
-
-  Restriction.add "Session" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Session", "Session" -> Some "Session"
-    (* Super dubious, but we don't have another way. *)
-    | "Session", "Mono" | "Mono", "Session" -> Some "Session"
-    | _ -> None
-  );
-
-  Restriction.add "Effect" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Effect", "Effect" -> Some "Effect"
-    | _ -> None
-  )
-
-(* Test, should be created with class *)
-(* Add a new restriction dynamically, e.g., Numeric *)
-let () =
-  Restriction.add "Numeric" (fun r1 r2 ->
-    match (r1, r2) with
-    | "Numeric", "Numeric" -> Some "Numeric"
-    | "Numeric", "Mono" | "Mono", "Numeric" -> Some "Numeric"
-    | _ -> None
-  )
 
 (* Convenient aliases for constructing default values *)
 let res_any     = "Any"

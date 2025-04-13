@@ -355,11 +355,13 @@ module Desugar = struct
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_alias_env =
+let desugar initial_alias_env initial_subkind_env =
 object (self)
   inherit SugarTraversals.fold_map as super
 
   val alias_env = initial_alias_env
+
+  val subkind_env = initial_subkind_env
 
   method! datatype' node = (self, Desugar.datatype' alias_env node)
 
@@ -402,18 +404,16 @@ object (self)
 
 
   method! bindingnode = function
-    | Class c ->
+    (*| Class c ->
       Debug.print "Running DesugarDatatypes";
 
-      let name = Binder.to_name c.class_binder in
+      let class_name = c.class_name in
 
       (* TODO: create constraint here *)
 
-      Debug.print ("Creating constraint " ^ name);
-
-      let _, class_binder = self#binder c.class_binder in
+      Debug.print ("Creating constraint " ^ class_name);
       
-      let class_tyvar = c.class_tyvar in
+      let class_tyvars = c.class_tyvars in
 
       (* Desugar all DTs *)
       let class_methods =
@@ -430,10 +430,11 @@ object (self)
         ) c 
       in
 
-      let desugared_class = {class_binder; class_tyvar; class_methods} in
+      let desugared_class = {class_name; class_tyvars; class_methods} in
          
       Debug.print "Leaving DesugarDatatypes";
-      (self, Class desugared_class)
+      ({< subkind_env = subkind_env >}, Class desugared_class)*)
+      
     | Aliases ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
@@ -537,11 +538,6 @@ object (self)
        let _, binder = self#binder binder in
        let datatype = Desugar.foreign alias_env datatype in
        self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
-    (*| ClassMethod method' ->
-      let binder, datatype = ClassMethod.method' method' in
-      let _, binder = self#binder binder in
-      let datatype = Desugar.datatype' subkind_env alias_env datatype in
-      self, ClassMethod (ClassMethod.modify ~methods:[(binder, datatype)] method')*)
     | b -> super#bindingnode b
 
 
@@ -560,49 +556,53 @@ object (self)
       self, (bindings, e)
 
   method aliases = alias_env
+
+  method subkinds = subkind_env
 end
 
-let phrase alias_env p =
-  (desugar alias_env)#phrase p
+let phrase alias_env subkind_env p =
+  (desugar alias_env subkind_env)#phrase p
 
-let binding alias_env ({ node; pos } as b : binding) =
+let binding alias_env subkind_env ({ node; pos } as b : binding) =
   match node with
   | Funs bnds ->
       let bnds =
         List.map
           (fun bnd ->
-            (desugar alias_env)#recursive_function bnd
+            (desugar alias_env subkind_env)#recursive_function bnd
             |> snd )
           bnds
       in
-      (alias_env, WithPos.make ~pos (Funs bnds))
+      (alias_env, subkind_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let o, b = (desugar alias_env)#binding b in
-      (o#aliases, b)
+      let o, b = (desugar alias_env subkind_env)#binding b in
+      (o#aliases, o#subkinds, b)
 
-let toplevel_bindings alias_env bs =
-  let alias_env, bnds =
+let toplevel_bindings alias_env subkind_env bs =
+  let alias_env, subkind_env, bnds =
     List.fold_left
-      (fun (alias_env, bnds) bnd ->
-         let aliases, bnd = binding alias_env bnd in
-           (aliases, bnd::bnds))
-    (alias_env,  [])
+      (fun (alias_env, subkind_env, bnds) bnd ->
+         let aliases, subkinds, bnd = binding alias_env subkind_env bnd in
+           (aliases, subkinds, bnd::bnds))
+    (alias_env, subkind_env, [])
       bs
-  in (alias_env, List.rev bnds)
+  in (alias_env, subkind_env, List.rev bnds)
 
 let program typing_env (bindings, p : Sugartypes.program) :
     Sugartypes.program =
   let alias_env = typing_env.tycon_env in
-  let alias_env, bindings =
-    toplevel_bindings alias_env bindings in
+  let subkind_env = typing_env.subkind_env in
+  let alias_env, subkind_env, bindings =
+    toplevel_bindings alias_env subkind_env bindings in
   (* let typing_env = { typing_env with tycon_env = alias_env } in *)
-  (bindings, opt_map ((phrase alias_env) ->- snd) p)
+  (bindings, opt_map ((phrase alias_env subkind_env) ->- snd) p)
 
 let sentence typing_env = function
   | Definitions bs ->
-      let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
+      let _alias_env, _subkind_env, bs' = 
+        toplevel_bindings typing_env.tycon_env typing_env.subkind_env bs in
         Definitions bs'
-  | Expression  p  -> let _o, p = phrase typing_env.tycon_env  p in
+  | Expression  p  -> let _o, p = phrase typing_env.tycon_env typing_env.subkind_env p in
       Expression p
   | Directive   d  -> Directive d
 

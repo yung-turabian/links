@@ -71,7 +71,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                      (* "Body" case *)
                      inst t
               end
-        | Function (f, m, t) -> Function (inst f, instr m, inst t)
+        | Function (f, m, t) -> 
+          Debug.print (Types.string_of_datatype f); 
+          Function (inst f, instr m, inst t)
         | Lolli (f, m, t) -> Lolli (inst f, instr m, inst t)
         | Record row -> Record (instr row)
         | Variant row -> Variant (instr row)
@@ -305,9 +307,7 @@ let instantiate : environment -> string -> type_arg list * datatype =
       with NotFound _ ->
         raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
     in
-(*       Debug.print ("t1: " ^ Types.string_of_datatype t); *)
       let t = instantiate_typ t in
-(*       Debug.print ("t2: " ^ Types.string_of_datatype (snd t)); *)
         t
 
 let rigid : environment -> string -> type_arg list * datatype =

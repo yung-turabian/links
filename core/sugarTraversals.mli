@@ -74,7 +74,7 @@ class map :
     method aliasnode       : aliasnode -> aliasnode
     method alias           : alias -> alias
     method aliasbody       : aliasbody -> aliasbody
-    method subkind_class_definition : subkind_class_definition -> subkind_class_definition
+    (*method subkind_class_definition : subkind_class_definition -> subkind_class_definition*)
     method instance_definition : instance_definition -> instance_definition
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
@@ -160,7 +160,7 @@ class fold :
     method aliasnode       : aliasnode -> 'self
     method alias           : alias -> 'self
     method aliasbody       : aliasbody -> 'self
-    method subkind_class_definition : subkind_class_definition -> 'self
+    (*method subkind_class_definition : subkind_class_definition -> 'self*)
     method instance_definition : instance_definition -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
@@ -188,7 +188,7 @@ object ('self)
   method aliasnode       : aliasnode -> 'self * aliasnode
   method alias           : alias -> 'self * alias
   method aliasbody       : aliasbody -> 'self * aliasbody
-  method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
+  (*method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition*)
   method instance_definition : instance_definition -> 'self * instance_definition
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)

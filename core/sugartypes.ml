@@ -314,98 +314,97 @@ module Pattern = struct
    [@@deriving show]
 end
 
-(*module ClassMethod: sig
+module Class: sig
   type 'a t
   and single
   and multi
   and phrase 
     [@@deriving show]
 
-  val methods : 'a t -> (Binder.with_pos * datatype') list
-  val method' : single t -> (Binder.with_pos * datatype')
-  val modify : ?methods:(Binder.with_pos * datatype') list -> ?kind:SugarKind.t -> ?qs:SugarQuantifier.t list -> ?body:phrase -> 'a t -> 'a t
-  val kind : 'a t -> SugarKind.t
-  val qs : 'a t -> SugarQuantifier.t list
-  val body : 'a t -> phrase option
+  val funs : 'a t -> (Binder.with_pos * datatype') list
+  val fun' : single t -> (Binder.with_pos * datatype')
+  val modify : 
+    ?name:Name.t -> 
+    ?quantifiers:SugarQuantifier.t list ->
+    ?funs:(Binder.with_pos * datatype') list -> 
+    ?body:phrase list -> 
+    'a t -> 'a t  val name : multi t -> Name.t
+  val body : 'a t -> phrase list
+  val quantifiers : multi t -> SugarQuantifier.t list
 
-  val multi : SugarKind.t -> SugarQuantifier.t list -> phrase option -> (Binder.with_pos * datatype') list -> multi t
-  val single : SugarKind.t -> SugarQuantifier.t list -> phrase option -> Binder.with_pos -> datatype' -> single t
+  val multi : Name.t -> SugarQuantifier.t list -> (Binder.with_pos * datatype') list -> multi t
+  val single : phrase list -> Binder.with_pos -> datatype' -> single t
+
 end = struct
   type single = unit
   and multi = unit
   and phrasenode = Constant of Constant.t (*TODO: Temp*)
   and phrase = phrasenode WithPos.t
-  and common =
-    { kind: SugarKind.t;
-      qs: SugarQuantifier.t list;
-      (** TODO: Will most likely need to be a list (i.e. multiple implementations of said method), better yet a Hastbl! Z*)
-      body: phrase option }
   and 'a t =
-    | Single of { common: common;
-                  binder: Binder.with_pos;
-                  datatype: datatype' }
-    | Multi of { common: common;
-                  methods: (Binder.with_pos * datatype') list }
+    | Single of { binder: Binder.with_pos;
+                  datatype: datatype';
+                  body: phrase list }
+    | Multi of {  
+      name: Name.t;
+      quantifiers: SugarQuantifier.t list;
+      funs: (Binder.with_pos * datatype') list 
+    }
   [@@deriving show]
 
-  let kind : type a. a t -> SugarKind.t = function
-  | Single { common; _ }
-  | Multi { common; _ } -> common.kind
+  let body = function
+    | Single { body; _ } -> body
+    | _ -> assert false
 
-  let qs : type a. a t -> SugarQuantifier.t list = function
-  | Single { common; _ }
-  | Multi { common; _ } -> common.qs
+  let funs : type a. a t -> (Binder.with_pos * datatype') list = function
+    | Single { binder; datatype; _ } -> [(binder, datatype)]
+    | Multi { funs; _ } -> funs
 
-  let body : type a. a t -> phrase option = function
-  | Single { common; _ }
-  | Multi { common; _ } -> common.body
-
-  (*let body : type a. a t -> phrase = function
-  | Single { common; _ } 
-  | Multi { common; _ } -> 
-    match common.body with
-    | Some body -> body
-    | None -> 
-      raise (Errors.internal_error 
-              ~filename:"sugartypes.ml" 
-              ~message:"Cannot get body of class method - it was not instantiated with a body (ClassMethod.body)")*)
-
-  let methods : type a. a t -> (Binder.with_pos * datatype') list = function
-  | Single { binder; datatype; _ } -> [(binder, datatype)]
-  | Multi { methods; _ } -> methods
-
-  let method' : single t -> (Binder.with_pos * datatype') = function
+  let fun' = function
     | Single { binder; datatype; _ } -> (binder, datatype)
     | _ -> assert false
 
-  let modify : type a. ?methods:(Binder.with_pos * datatype') list -> ?kind:SugarKind.t -> ?qs:SugarQuantifier.t list -> ?body:phrase -> a t -> a t
-    = fun ?methods ?kind ?qs ?body class_method ->
-    let common : type a. a t -> common = function
-      | Single { common; _ } -> common
-      | Multi { common; _ } -> common
-    in
-    let common =
-      let common = common class_method in
-      common
-      |> fun c -> Option.fold ~none:c ~some:(fun kind -> { c with kind }) kind
-      |> fun c -> Option.fold ~none:c ~some:(fun qs -> { c with qs }) qs
-    in
-    match class_method, methods with
-    | Single _, Some [(binder, datatype)] ->
-      Single { common; binder; datatype }
-    | Multi _, Some methods ->
-      Multi { common; methods }
-    | _, _ ->
-      raise (Errors.internal_error ~filename:"sugartypes.ml" ~message:"Invalid arguments (ClassMethod.modify)")
+  let name = function
+    | Multi { name; _ } -> name
+    | _ -> assert false
 
-  let multi : SugarKind.t -> SugarQuantifier.t list -> phrase option -> (Binder.with_pos * datatype') list -> multi t
-    = fun kind qs body methods ->
-    Multi { common = { kind; qs; body }; methods }
+  let quantifiers = function
+    | Multi { quantifiers; _ } -> quantifiers
+    | _ -> assert false
 
-  let single : SugarKind.t -> SugarQuantifier.t list -> phrase option -> Binder.with_pos -> datatype' -> single t
-    = fun kind qs body binder datatype ->
-    Single { common = { kind; qs; body }; binder; datatype }
-end*)
+  let modify : type a. 
+    ?name:Name.t -> 
+    ?quantifiers:SugarQuantifier.t list ->
+    ?funs:(Binder.with_pos * datatype') list -> 
+    ?body:phrase list -> 
+    a t -> a t =
+    fun ?name ?quantifiers ?funs ?body -> function
+      | Single ({ binder; datatype; body = old_body } as single) ->
+          let body = Option.value body ~default:old_body in
+          (match funs with
+           | None -> Single { single with body }
+           | Some [(new_binder, new_datatype)] -> 
+               Single { binder = new_binder; datatype = new_datatype; body }
+           | _ -> 
+               raise (Errors.internal_error 
+                      ~filename:"sugartypes.ml" 
+                      ~message:"Cannot change Single to Multi via modify"))
+      | Multi ({ name = old_name; quantifiers = old_quantifiers; funs = old_funs } as multi) ->
+          let name = Option.value name ~default:old_name in
+          let quantifiers = Option.value quantifiers ~default:old_quantifiers in
+          let funs = Option.value funs ~default:old_funs in
+          match body with
+          | None -> Multi { name; quantifiers; funs }
+          | Some _ -> 
+              raise (Errors.internal_error 
+                     ~filename:"sugartypes.ml" 
+                     ~message:"Cannot add body to Multi via modify")
+
+  let multi name quantifiers funs =
+    Multi { name; quantifiers; funs }
+
+  let single body binder datatype =
+    Single { binder; datatype; body }
+end
 
 module Alien: sig
   type 'a t [@@deriving show]
@@ -678,6 +677,7 @@ and bindingnode =
   | Fun      of function_definition
   | Funs     of recursive_function list
   | Foreign  of Alien.single Alien.t
+  | ClassFun of Class.single Class.t
   | Import   of { pollute: bool; path : Name.t list }
   | Open     of Name.t list
   | Aliases  of alias list
@@ -687,8 +687,7 @@ and bindingnode =
   | Exp      of phrase
   | Module   of module_definition
   | AlienBlock  of Alien.multi Alien.t
-  | Class    of subkind_class_definition
-  (* | ClassMethod of ClassMethod.single ClassMethod.t *)
+  | Class    of Class.multi Class.t
   | Instance of instance_definition
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
@@ -1019,13 +1018,13 @@ struct
             (Alien.declarations alien)
         in
         bound_foreigns, empty
-    | Class { class_methods; _} ->
+    | Class class' ->
       let bound_methods =
         List.fold_left
           (fun acc (bndr, _) ->
             StringSet.add (Binder.to_name bndr) acc)
           (StringSet.empty)
-          class_methods
+          (Class.funs class')
       in
       bound_methods, empty
     | Module { module_members; _ } ->
@@ -1035,8 +1034,7 @@ struct
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
          (empty, empty) module_members
-    (* Shouldn't be encountered yet, have to desugar a class first *)
-    (*| ClassMethod _ -> assert false*)
+    | ClassFun _ -> failwith "Should not encounterd a broken down class function."
 
   and funlit (fn : funlit) : StringSet.t =
     match fn with

@@ -46,6 +46,7 @@ object ('self)
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
   method bind_subkind    : string -> Types.subkind_spec -> 'self
+  method unbind_var      : string -> 'self
   method bind_binder     : Binder.with_pos -> 'self
 
   method lookup_type     : Name.t -> Types.datatype

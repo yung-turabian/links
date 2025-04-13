@@ -1,4 +1,107 @@
 
+module Data {
+		typename Numeric = [| Int | Float |];
+
+		#infix 4 ==;
+		#infix 4 <>;
+		#infixr 3 &&;
+		#infixr 2 ||;
+
+		class Eq : (a::Type) {
+				#sig == : (a, a) -> Bool;
+				#sig <> : (a, a) -> Bool;
+				sig compare : (a, a) -> Bool;
+		}
+
+		infix 4 <<;
+		#infix 4 >;
+		#infix 4 <=;
+		#infix 4 >=;
+
+		class Ord : (a::Eq) {
+				sig << : (a, a) -> Bool;
+				#sig > : (a, a) -> Bool;
+				#sig <= : (a, a) -> Bool;
+				#sig >= : (a, a) -> Bool;
+				#sig maximum : (a, a) -> a;
+				#sig minumum : (a, a) -> a;
+				sig maX : (a, a) -> a;
+		}
+	
+		sig minimum : (a::Ord, a) -> a
+		fun minimum(x,y) {
+			if (x < y) { x }
+			else { y }
+		}
+		
+		sig maximum : (a::Ord, a) -> a
+		fun maximum(a,b) {
+			if (a > b) { a }
+			else { b }
+		}
+
+		sig ltInt : (Int, Int) -> Bool
+		fun ltInt(f,g) {
+				if (f < g) true
+				else false
+		}
+		
+		#instance Ord : Int {
+		#		<< = ltInt;
+		#}
+
+		#class Show : (a::Base) {
+		#		sig show : (a) -> String;
+		#}
+
+		fun showBool(b) {
+				switch(b) {
+						case true -> "true"
+						case false -> "false"
+				}
+		}
+
+		#instance Show : Bool {
+		#		show : showBool;
+		#}
+
+		
+		# Adopted from PureScript
+
+		#class Monoid : a {
+		#		
+		#}
+
+		#class Group : a {
+		#
+		#}
+
+		#class Ring : a {
+		#
+		#}
+
+		#class Semiring : (a) {
+		#		sig + : (a, a) -> a;
+		#}
+		
+		#instance Semiring : Int {
+		#		+ : 
+		#}
+}
+
+open Data;
+
+
+infixr 5 ++;
+
+sig ++ : ([a], [a]) -> [a]
+op ms ++ ns {
+		switch (ms) {
+				case [] 		-> ns
+				case m::ms  -> m::(ms ++ ns)
+		}
+}
+
 fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
@@ -617,7 +720,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-# sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }

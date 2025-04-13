@@ -195,6 +195,8 @@ module type Constraint = sig
      true. *)
   val make_type : datatype -> unit
   val make_row : row -> unit
+
+  val operations : (string * (typ -> typ)) list
 end
 
 module ConstraintRegistry : sig
@@ -225,6 +227,7 @@ val create_constraint :
   (row -> bool) ->
   (typ -> unit) ->
   (row -> unit) ->
+  (string * (typ -> typ)) list ->
   (module Constraint)
 
 val dual_row : row -> row
@@ -500,6 +503,7 @@ sig
     method typ : typ -> ('self_type * typ)
     method row : row -> ('self_type * row)
     method row_var : row_var -> ('self_type * row_var)
+    method session : session_type -> ('self_type * session_type)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
     method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
     method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)

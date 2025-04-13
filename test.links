@@ -1,27 +1,29 @@
 infixl 6 +;
-#infixl 7 *;
+infixl 7 *;
 
 typename Nat = [|Zero|Succ:Nat|];
 
+#class Base2;
+
 # In this case the operator + takes on the kind Numeric.
-class Num : (a) {
-		sig + : (a, a) -> a;
+class Num : (a::(Unl, Base)) {
+		sig `negate` : (a) -> a;
 }
 
-instance Num : Int {
-		+ : addInt;
-}
+#class Eq : (a) {
+#		sig == : (a, a) -> a;
+#}
 
-op m + n {
-		n
-}
+#instance Num : Int {
+#		`negate` : negInt;
+#}
 
-#sig test : (a::Num) -> a
-#fun test(x) { x }
+#sig dummy : (a::Num) -> a
+#fun dummy (x) {
+#		x
+#}
 
-#test(2)
-
-2 + 2
+`negate` 2
 
 
 # Sees that + is already defined with a kind signature, now has

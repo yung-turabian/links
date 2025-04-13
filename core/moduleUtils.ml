@@ -220,7 +220,7 @@ let create_module_info_map program =
     let rec get_subkind_names = function
     | [] -> []
     | { node = Class c; _ } :: bs ->
-        Binder.to_name c.class_binder :: get_binding_names bs
+        (Class.name c) :: get_binding_names bs
     | _ :: bs -> get_subkind_names bs in
 
     (* Gets data constructors for variants *)

@@ -239,6 +239,7 @@ sig
     method type_args : type_arg list -> ('self_type * type_arg list)
     method typ : typ -> ('self_type * typ)
     method row : row -> ('self_type * row)
+    method session : session_type -> ('self_type * session_type)
     method row_var : row_var -> ('self_type * row_var)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
     method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
@@ -276,6 +277,9 @@ struct
     method primitive : Primitive.t -> ('self_type * Primitive.t) = fun p -> (o,p)
     method row : row -> ('self_type * row) =
       fun row -> o#typ row
+
+    method session : session_type -> ('self_type * session_type) =
+      fun session_type -> o#typ session_type
 
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var) =
       fun point ->
@@ -423,17 +427,16 @@ struct
          let (o, t') = o#typ t in
          (o, Present t')
       | Absent -> (o, Absent)
-      (* FIXME: change some typs to session_types *)
       | Input (t, s) ->
          let (o, t') = o#typ t in
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Input (t', s'))
       | Output (t, s) ->
          let (o, t') = o#typ t in
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Output (t', s'))
       | Dual s ->
-         let (o, s') = o#typ s in
+         let (o, s') = o#session s in
          (o, Dual s')
       | Select r ->
          let (o, r') = o#row r in
@@ -562,6 +565,9 @@ module type Constraint = sig
      appropriate subkind, so that {!is_type} will return true. *)
   val make_type : typ -> unit
   val make_row : row -> unit
+
+   (* New: Associated functions for this constraint *)
+   val operations : (string * (typ -> typ)) list
 end
 (*
 module DynamicConstraint = struct
@@ -625,14 +631,23 @@ module ConstraintRegistry = struct
   type constraint_module = (module Constraint)
 
   (** A table of all possible constraints in the system *)
-  let constraints : (string, (module Constraint)) Hashtbl.t = Hashtbl.create 10
+  let constraints : (string, constraint_module) Hashtbl.t = Hashtbl.create 16
 
   let register name constraint_module =
     Hashtbl.add constraints name constraint_module
 
+  (*TODO: rename to get_constraint *)
   let get_restriction_constraint name =
     try Some (Hashtbl.find constraints name)
     with NotFound _ -> None
+
+  (* New: Lookup a specific operation in a constraint *)
+  let get_operation constraint_name op_name =
+    match get_restriction_constraint constraint_name with
+    | Some (module C) ->
+        List.assoc_opt op_name C.operations
+    | None -> None
+    
 end
 
 (** Allows the construction of a {!Constraint}, which needs to be more a dynamic structure to allow
@@ -644,6 +659,7 @@ let create_constraint
   can_row_be
   make_type
   make_row
+  operations
   : (module Constraint) =
   (module struct
     let type_satisfies = type_satisfies
@@ -652,6 +668,7 @@ let create_constraint
     let can_row_be = can_row_be
     let make_type = make_type
     let make_row = make_row
+    let operations = operations
   end)
 
 
@@ -893,6 +910,64 @@ module Base : Constraint = struct
   let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) "Base" false
   let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) "Base" true
   let make_type, make_row = make_restriction_transform "Base"
+
+  let operations = []
+end
+
+module Num : Constraint = struct
+  open Restriction
+  open Primitive
+
+  module NumPredicate = struct
+    class klass = object
+      inherit type_predicate as super
+
+      method! point_satisfies f vars point =
+        match Unionfind.find point with
+        | Recursive _ -> false
+        | _ -> super#point_satisfies f vars point
+
+      method! type_satisfies vars = function
+        (* Unspecified kind *)
+        | Not_typed -> assert false
+        | Var _ | Recursive _ | Closed ->
+           failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+        | Alias _  as t  -> super#type_satisfies vars t
+        | (Application _ | RecursiveApplication _) -> false
+        | Meta _ as t  -> super#type_satisfies vars t
+        (* Type *)
+        | Primitive (Int | Float) -> true
+        | Primitive _ -> false
+        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | ForAll ([], t) -> super#type_satisfies vars t
+        (* Effect *)
+        | Effect _ as t -> super#type_satisfies vars t
+        | Operation _ -> failwith "TODO types.ml/766"
+        (* Row *)
+        | Row _ as t -> super#type_satisfies vars t
+        (* Presence *)
+        | Absent -> true
+        | Present _ as t -> super#type_satisfies vars t
+        (* Session *)
+        | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
+    end
+  end
+
+  let type_satisfies, row_satisfies = make_restriction_predicate (module NumPredicate) "Num" false
+  let can_type_be, can_row_be = make_restriction_predicate (module NumPredicate) "Num" true
+  let make_type, make_row = make_restriction_transform "Num"
+
+
+  (* New: Define operations for Num *)
+  let operations = [
+    ("negate", fun t ->
+      match t with
+      | Primitive Int -> Primitive Int  (* negate : Int -> Int *)
+      | Primitive Float -> Primitive Float  (* negate : Float -> Float *)
+      | _ -> failwith "Num.negate: unsupported type"
+    );
+  ]
+
 end
 
 (* unl type stuff *)
@@ -997,6 +1072,8 @@ module Unl : Constraint = struct
        | (v, (pk, (_, sk)), `Flexible) -> Unionfind.change point (Var (v, (pk, (lin_unl, sk)), `Flexible))
        | (_, _, `Rigid) -> assert false
    end)#visitors
+
+  let operations = []
 end
 
 module Session : Constraint = struct
@@ -1052,6 +1129,8 @@ module Session : Constraint = struct
          | Input _ | Output _ | Choice _ | Select _ | Dual _ | End -> ()
          | ty -> super#visit_type vars ty
      end)#visitors
+
+     let operations = []
 end
 
 module Mono : Constraint = struct
@@ -1084,6 +1163,8 @@ module Mono : Constraint = struct
      end)#predicates
 
   let make_type, make_row = make_restriction_transform ~ensure:true "Mono"
+
+  let operations = []
 end
 
 (** Defaults *)
@@ -2493,6 +2574,7 @@ struct
        | (Linearity.Unl, "Any")     -> ""
        | (Linearity.Any, "Any")     -> "Any"
        | (Linearity.Unl, "Base")    -> Restriction.to_string res_base
+       | (Linearity.Any, "Num")    -> "Num"
        | (Linearity.Any, "Session") -> Restriction.to_string res_session
        | (Linearity.Unl, "Effect")  -> Restriction.to_string res_effect
        | (l, r) -> full (l, r)
@@ -2509,6 +2591,7 @@ struct
       | PrimaryKind.Type, (Linearity.Unl, "Any") -> ""
       | PrimaryKind.Type, (Linearity.Unl, "Base") ->
          Restriction.to_string res_base
+      | PrimaryKind.Type, (Linearity.Any, "Num") -> "Num"
       | PrimaryKind.Type, (Linearity.Any, "Session") ->
          Restriction.to_string res_session
       | PrimaryKind.Type, sk ->
@@ -3633,6 +3716,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, "Any"     -> assert false
                  | L.Unl, "Base"    -> StringBuffer.write buf (R.to_string res_base)
+                 | L.Any, "Num"     -> StringBuffer.write buf ("Num")
                  | L.Any, "Session" -> StringBuffer.write buf (R.to_string res_session)
                  | subknd ->
                     let policy = Policy.set_kinds Policy.Full (Context.policy ctx) in

@@ -19,7 +19,7 @@ let hashfind_dflt table elem def =
      under k
 *)
 
-let ( *->!) table k v = Hashtbl.replace table k v
+let ( *->! ) table k v = Hashtbl.replace table k v
 (* let ($) op arg = op arg*)
 
 let ( *-> ) = hashfind_dflt

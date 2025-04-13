@@ -132,9 +132,9 @@ perhaps. *)
 let kind_of p =
   let open Kind in function
   (* primary kind abbreviation  *)
-  | "Type"     -> SugarKind.mk_resolved (Some pk_type) None
-  | "Row"      -> SugarKind.mk_resolved (Some pk_row) None (* either a value row or an effect row *)
-  | "Presence" -> SugarKind.mk_resolved (Some pk_presence) None
+  | "Type"     -> SugarKind.mk_resolved (Some pk_type) (Some default_subkind)
+  | "Row"      -> SugarKind.mk_resolved (Some pk_row) (Some default_subkind) (* either a value row or an effect row *)
+  | "Presence" -> SugarKind.mk_resolved (Some pk_presence) (Some (lin_any, res_any))
   (* subkind of type abbreviations *)
   | k          -> SugarKind.mk_unresolved None (None, (Some k))
 
@@ -235,27 +235,27 @@ module MutualBindings = struct
   type mutual_bindings =
     { mut_types: alias list;
       mut_funs: (function_definition * Position.t) list;
-      mut_classes: (subkind_class_definition * Position.t) list;
+ (*     mut_classes: (subkind_class_definition * Position.t) list;*)
       mut_pos: Position.t }
 
 
-  let empty pos = { mut_types = []; mut_funs = []; mut_classes = []; mut_pos = pos }
+  let empty pos = { mut_types = []; mut_funs = []; (*mut_classes = [];*) mut_pos = pos }
 
-  let add ({ mut_types = ts; mut_funs = fs; mut_classes = cs; _ } as block) binding =
+  let add ({ mut_types = ts; mut_funs = fs; (*mut_classes = cs;*) _ } as block) binding =
     let pos = WithPos.pos binding in
     match WithPos.node binding with
     | Fun f ->
         { block with mut_funs = ((f, pos) :: fs) }
     | Aliases [t] ->
         { block with mut_types = (t :: ts) }
-    | Class c ->
-        { block with mut_classes = ((c, pos) :: cs) }
+    (*| Class c ->
+        { block with mut_classes = ((c, pos) :: cs) }*)
     | Aliases _ -> assert false
     | _ ->
         raise (ConcreteSyntaxError
           (pos, "Only `fun`, `typename` and `class` bindings are allowed in a `mutual` block."))
 
-  let check_dups funs tys classes =
+  let check_dups funs tys (*classes*) =
     (* Check to see whether there are any duplicate names, and report
      * an error if so. *)
   let check get_name xs =
@@ -273,19 +273,19 @@ module MutualBindings = struct
 
   let fun_name fn = Binder.to_name fn.fun_binder in
   let ty_name (n, _, _, _) = n in
-  let class_name c = Binder.to_name c.class_binder in
+  (*let class_name {class_name; _} = class_name in*)
   let tys_with_pos =
       List.map (fun {WithPos.node=(n, qs, dt); pos} -> ((n, qs, dt, pos), pos))
         tys in
   check fun_name funs; 
-  check ty_name tys_with_pos; 
-  check class_name classes
+  check ty_name tys_with_pos
+  (*check class_name classes*)
 
 
-  let flatten { mut_types; mut_funs; mut_classes; mut_pos } =
+  let flatten { mut_types; mut_funs; (*mut_classes;*) mut_pos } =
     (* We need to take care not to lift non-recursive functions to
      * recursive functions accidentally. *)
-    check_dups mut_funs mut_types mut_classes;
+    check_dups mut_funs mut_types; (*mut_classes;*)
     let fun_binding = function
       | [] -> []
       | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
@@ -306,12 +306,12 @@ module MutualBindings = struct
       | [] -> []
       | ts -> [WithPos.make ~pos:mut_pos (Aliases (List.rev ts))] in
 
-    let class_binding = function
+    (*let class_binding = function
       | [] -> []
       | [(c, pos)] -> [WithPos.make ~pos (Class c)] 
-      | _ -> failwith "class_binding doesn't handle lists of classes" in
+      | _ -> failwith "class_binding doesn't handle lists of classes" in*)
 
-    type_binding mut_types @ fun_binding mut_funs @ class_binding mut_classes
+    type_binding mut_types @ fun_binding mut_funs (*@ class_binding mut_classes*)
 end
 
 let parse_foreign_language pos lang =
@@ -465,7 +465,7 @@ declaration:
 nofun_declaration:
 | alien_block                                                  { $1 }
 | class_declaration                                            { $1 }
-| instance_declaration                                         { $1 }
+(*| instance_declaration                                         { $1 }*)
 | ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { let alien =
                                                                    let binder = binder ~ppos:$loc($4) $4 in
                                                                    let datatype = datatype $6 in
@@ -509,13 +509,11 @@ nofun_declaration:
        by subkind. This could absolve a future issue where the system doesnt know how to subkind to the proper one.
 */
 class_operator:
-| OPERATOR | VARIABLE { $1 }
+| OPERATOR                                                     { $1 }
 
 // HACK Something better than variable? Check exp stuff, atomic_expression
-instance_method:
-| class_operator COLON exp SEMICOLON                              { ($1, $3) }
-
-//| class_operator patterns EQ instance_content SEMICOLON       { ($1, $2, $4) }
+(*instance_method:
+| class_operator COLON exp SEMICOLON                           { ($1, $3) }
 
 instance_methods:
 | instance_method+                                             { $1 }
@@ -523,22 +521,27 @@ instance_methods:
 instance_declaration:
 | INSTANCE CONSTRUCTOR COLON primary_datatype_pos 
   LBRACE instance_methods RBRACE                               { instance_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) (datatype $4) $6  }
-
+*)
 class_datatype:
-| SIG class_operator COLON datatype SEMICOLON                  { (binder ~ppos:$loc($1) $2, datatype $4) }
+| SIG class_operator COLON datatype SEMICOLON                  { (binder ~ppos:$loc($2) $2, datatype $4) }
 
 class_datatypes:
 | class_datatype+                                              { $1 }
 
-proper_class:
-| CLASS CONSTRUCTOR COLON typeargs_opt 
-  LBRACE class_datatypes RBRACE                                { class_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) $4 $6 }
+subkind_block:
+| CLASS name=CONSTRUCTOR COLON quantifiers=typeargs_opt 
+  LBRACE funs=class_datatypes RBRACE                        {
+                                                                  with_pos $loc(Class (Class.multi name quantifiers funs))
+                                                               }
 
 subkind_decl:
-| CLASS CONSTRUCTOR SEMICOLON                                  { class_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) [] [] }
+| CLASS name=CONSTRUCTOR SEMICOLON                             
+                                                              {
+                                                                with_pos $loc (Class (Class.multi name [] []))
+                                                              }
 
 class_declaration:
-| proper_class                                                 { $1 }
+| subkind_block                                                { $1 }
 | subkind_decl                                                 { $1 }
 
 alien_datatype:

@@ -211,12 +211,12 @@ module SugarConstructors (Position : Pos)
                           })
 
   (* Create a subkind class binding. *)
-  let class_binding ?(ppos=dp) bndr tyvars methods =
+  (*let class_binding ?(ppos=dp) name tyvars methods =
     with_pos ppos (Class { 
-                            class_binder = bndr; 
-                            class_tyvar = tyvars;
+                            class_name = name; 
+                            class_tyvars = tyvars;
                             class_methods = methods
-                         })
+                         })*)
 
   (* Create a subkind class instance. *)
   let instance_binding ?(ppos=dp) bndr typ methods =
