@@ -922,23 +922,20 @@ class transform (env : Types.typing_environment) =
                 | _ -> raise (internal_error "transformSugar.ml: unannotated type alias")
             ) ts in
           (o, Aliases ts)
-      (*| Class { class_name; class_tyvars; class_methods } -> 
-        Debug.if_set (CommonTypes.show_subkindclasses)
-          (fun () -> ("Entering transformSugar"));
-
+      | ClassDecl (name, qs) -> 
         let outer_tyvars = o#backup_quantifiers in
-        let (o, class_tyvars) = o#quantifiers class_tyvars in
+        let (o, qs) = o#quantifiers qs in
 
         let o = o#restore_quantifiers outer_tyvars in
 
         (* Construct a new subkind environment, and populate the map from
         * strings to the desugared datatypes. *)
-        let o, transformed_class =
-          (fun o' { class_name; class_tyvars; class_methods } ->
+        (*let o, name, qs =
+          (fun o' name qs ->
 
-              let qs = List.map SugarQuantifier.get_resolved_exn class_tyvars in
-              let pks = List.map (Quantifier.to_primary_kind) qs in
-              let sks = List.map (Quantifier.to_subkind) qs in
+              let resolved_qs = List.map SugarQuantifier.get_resolved_exn qs in
+              let pks = List.map (Quantifier.to_primary_kind) resolved_qs in
+              let sks = List.map (Quantifier.to_subkind) resolved_qs in
               let pk, sk = match ListUtils.find_fstdiff pks with
               | Some k -> 
                 raise (Errors.Type_error (SourceCode.Position.dummy,
@@ -957,22 +954,21 @@ class transform (env : Types.typing_environment) =
                   in
                   (pk, sk)
               in
-              let method_names = List.map fst class_methods in
+              (*let method_names = List.map fst class_methods in
               let method_dts = List.map snd class_methods in
               let method_typs = List.map snd method_dts in
-              let method_tys = List.map val_of method_typs in
+              let method_tys = List.map val_of method_typs in*)
               (*List.iter2 (fun s t -> Debug.print ("\t" ^ s ^ " : " ^ Types.string_of_datatype t)) method_names method_tys;*)
               
               (* Defaults to restriction of its name, TODO: actually get kind, lin, res *)
-              let o' = o'#bind_subkind class_name (`Class ((pk, sk), qs, method_names) ) in
+              let o' = o'#bind_subkind name (`Class ((pk, sk), resolved_qs, []) ) in
 
-              o', { class_name; class_tyvars; class_methods }
-          ) o { class_name; class_tyvars; class_methods }
-        in
+              o', name, qs
+          ) o name qs
+        in*)
 
-        Debug.if_set (CommonTypes.show_subkindclasses)
-          (fun () -> ("Exiting transformSugar"));
-        (o, Class transformed_class)*)
+
+        (o, ClassDecl (name, qs))
       | Instance i ->
 
         (o, Instance i)

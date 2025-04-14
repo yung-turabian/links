@@ -321,6 +321,11 @@ module Class: sig
   and phrase 
     [@@deriving show]
 
+  
+
+  val body : 'a t -> phrase list
+  val quantifiers : 'a t -> SugarQuantifier.t list
+  val name : 'a t -> Name.t
   val funs : 'a t -> (Binder.with_pos * datatype') list
   val fun' : single t -> (Binder.with_pos * datatype')
   val modify : 
@@ -328,27 +333,28 @@ module Class: sig
     ?quantifiers:SugarQuantifier.t list ->
     ?funs:(Binder.with_pos * datatype') list -> 
     ?body:phrase list -> 
-    'a t -> 'a t  val name : multi t -> Name.t
-  val body : 'a t -> phrase list
-  val quantifiers : multi t -> SugarQuantifier.t list
+    'a t -> 'a t  
 
   val multi : Name.t -> SugarQuantifier.t list -> (Binder.with_pos * datatype') list -> multi t
-  val single : phrase list -> Binder.with_pos -> datatype' -> single t
+  val single : Name.t -> SugarQuantifier.t list -> phrase list -> Binder.with_pos -> datatype' -> single t
 
 end = struct
   type single = unit
   and multi = unit
+  and common =
+    { name: Name.t;
+      quantifiers: SugarQuantifier.t list;
+    }
+
   and phrasenode = Constant of Constant.t (*TODO: Temp*)
   and phrase = phrasenode WithPos.t
   and 'a t =
-    | Single of { binder: Binder.with_pos;
+    | Single of { common: common;
+                  binder: Binder.with_pos;
                   datatype: datatype';
                   body: phrase list }
-    | Multi of {  
-      name: Name.t;
-      quantifiers: SugarQuantifier.t list;
-      funs: (Binder.with_pos * datatype') list 
-    }
+    | Multi of {  common: common;
+                  funs: (Binder.with_pos * datatype') list }
   [@@deriving show]
 
   let body = function
@@ -363,48 +369,84 @@ end = struct
     | Single { binder; datatype; _ } -> (binder, datatype)
     | _ -> assert false
 
-  let name = function
-    | Multi { name; _ } -> name
-    | _ -> assert false
+  let name : type a. a t -> Name.t = function
+  | Single { common; _ } -> common.name
+  | Multi { common; _ } -> common.name
 
   let quantifiers = function
-    | Multi { quantifiers; _ } -> quantifiers
-    | _ -> assert false
+  | Single { common; _ } -> common.quantifiers
+  | Multi { common; _ } -> common.quantifiers
+
 
   let modify : type a. 
-    ?name:Name.t -> 
-    ?quantifiers:SugarQuantifier.t list ->
-    ?funs:(Binder.with_pos * datatype') list -> 
-    ?body:phrase list -> 
-    a t -> a t =
-    fun ?name ?quantifiers ?funs ?body -> function
-      | Single ({ binder; datatype; body = old_body } as single) ->
-          let body = Option.value body ~default:old_body in
-          (match funs with
-           | None -> Single { single with body }
-           | Some [(new_binder, new_datatype)] -> 
-               Single { binder = new_binder; datatype = new_datatype; body }
-           | _ -> 
-               raise (Errors.internal_error 
-                      ~filename:"sugartypes.ml" 
-                      ~message:"Cannot change Single to Multi via modify"))
-      | Multi ({ name = old_name; quantifiers = old_quantifiers; funs = old_funs } as multi) ->
-          let name = Option.value name ~default:old_name in
-          let quantifiers = Option.value quantifiers ~default:old_quantifiers in
-          let funs = Option.value funs ~default:old_funs in
-          match body with
-          | None -> Multi { name; quantifiers; funs }
-          | Some _ -> 
+  ?name:Name.t -> 
+  ?quantifiers:SugarQuantifier.t list ->
+  ?funs:(Binder.with_pos * datatype') list -> 
+  ?body:phrase list -> 
+  a t -> a t =
+  fun ?name ?quantifiers ?funs ?body -> function
+    | Single ({ common; binder; datatype; body = old_body } as single) ->
+        let common = match name with
+          | Some name -> { common with name }
+          | None -> common
+        in
+        let common = match quantifiers with
+          | Some qs -> { common with quantifiers = qs }
+          | None -> common
+        in
+        let body = Option.value body ~default:old_body in
+        (match funs with
+          | None -> Single { common; binder; datatype; body }
+          | Some [(new_binder, new_datatype)] -> 
+              Single { common; binder = new_binder; datatype = new_datatype; body }
+          | _ -> 
               raise (Errors.internal_error 
-                     ~filename:"sugartypes.ml" 
-                     ~message:"Cannot add body to Multi via modify")
+                    ~filename:"sugartypes.ml" 
+                    ~message:"Cannot change Single to Multi via modify"))
+    | Multi ({ common; funs = old_funs } as multi) ->
+        let common = match name with
+          | Some name -> { common with name }
+          | None -> common
+        in
+        let common = match quantifiers with
+          | Some qs -> { common with quantifiers = qs }
+          | None -> common
+        in
+        let funs = Option.value funs ~default:old_funs in
+        match body with
+        | None -> Multi { common; funs }
+        | Some _ -> 
+            raise (Errors.internal_error 
+                    ~filename:"sugartypes.ml" 
+                    ~message:"Cannot add body to Multi via modify")
 
   let multi name quantifiers funs =
-    Multi { name; quantifiers; funs }
+    Multi { common = { name; quantifiers }; funs }
 
-  let single body binder datatype =
-    Single { binder; datatype; body }
+  let single name quantifiers body binder datatype =
+    Single { common = { name; quantifiers }; binder; datatype; body }
 end
+
+module DatatypeKey = struct
+  type t = Types.datatype
+    [@@deriving show]
+  let compare = compare (* or implement custom comparison *)
+end
+
+module DatatypeMap = Map.Make(DatatypeKey)
+module OperationMap = Map.Make(String)
+
+type code_lookup = string DatatypeMap.t OperationMap.t
+
+let empty = OperationMap.empty
+
+let add_implementation db op_name datatype code =
+  let type_map = 
+    OperationMap.find_opt op_name db
+    |> Option.value ~default:DatatypeMap.empty
+  in
+  OperationMap.add op_name (DatatypeMap.add datatype code type_map) db
+
 
 module Alien: sig
   type 'a t [@@deriving show]
@@ -677,6 +719,7 @@ and bindingnode =
   | Fun      of function_definition
   | Funs     of recursive_function list
   | Foreign  of Alien.single Alien.t
+  | ClassDecl of Name.t * SugarQuantifier.t list
   | ClassFun of Class.single Class.t
   | Import   of { pollute: bool; path : Name.t list }
   | Open     of Name.t list
@@ -1034,6 +1077,7 @@ struct
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
          (empty, empty) module_members
+    | ClassDecl _
     | ClassFun _ -> failwith "Should not encounterd a broken down class function."
 
   and funlit (fn : funlit) : StringSet.t =

@@ -413,6 +413,8 @@ struct
     | Rec defs -> Rec (List.map fun_def defs)
     | Alien { alien_binder = x; object_name; language } ->
        Alien { alien_binder = binder x; object_name; language }
+    | CFun { cfun_binder = x; } ->
+      CFun { cfun_binder = binder x }
     | Module _ ->
        raise (Errors.internal_error
                 ~filename:"closures.ml"

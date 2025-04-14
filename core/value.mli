@@ -244,6 +244,7 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
+| `SukindClassFunction of string
 | `ClientDomRef of int
 | `ClientFunction of string
 | `ClientClosure of int

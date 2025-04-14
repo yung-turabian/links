@@ -61,6 +61,7 @@ let variables_in_computation comp =
     | Rec fds -> List.iter traverse_fundef fds
     | Module (_, (Some bs)) -> List.iter traverse_binding bs
     | Module _
+    | CFun _
     | Alien _ -> ()
   and traverse_special = function
     | Database value

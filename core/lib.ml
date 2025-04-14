@@ -17,7 +17,7 @@ let runtime_type_error error =
      "Please file a bug report.")
 
 (* Subkind (Class) environment *)
-module SignatureEnv = Env.String
+module SubkindEnv = Env.String
 
 let subkind_env : Types.subkind_environment = DefaultSubkindClasses.subkind_env
 
@@ -335,6 +335,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ~box:Value.box_float
                                  ~into:(Types.Primitive Primitive.Float)
                                  IMPURE;
+  "boolToString", conversion_op ~from:(Types.Primitive Primitive.Bool)
+                                 ~unbox:Value.unbox_bool
+                                  ~conv:string_of_bool
+                                  ~box:Value.box_string
+                                  ~into:Types.string_type
+                                  PURE;
 
   "stringToXml",
   ((p1 string_to_xml),
@@ -356,10 +362,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Int) ~> a",
    IMPURE);
 
-  "show",
+  (*"show",
   (p1 (fun v -> Value.box_string (Value.string_of_value v)),
    datatype "(a) ~> String",
-   IMPURE);
+   IMPURE);*)
 
   "exit",
   (`Continuation Value.Continuation.empty,

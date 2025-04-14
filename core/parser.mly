@@ -465,7 +465,7 @@ declaration:
 nofun_declaration:
 | alien_block                                                  { $1 }
 | class_declaration                                            { $1 }
-(*| instance_declaration                                         { $1 }*)
+| instance_declaration                                         { $1 }
 | ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { let alien =
                                                                    let binder = binder ~ppos:$loc($4) $4 in
                                                                    let datatype = datatype $6 in
@@ -512,7 +512,7 @@ class_operator:
 | OPERATOR                                                     { $1 }
 
 // HACK Something better than variable? Check exp stuff, atomic_expression
-(*instance_method:
+instance_method:
 | class_operator COLON exp SEMICOLON                           { ($1, $3) }
 
 instance_methods:
@@ -521,7 +521,7 @@ instance_methods:
 instance_declaration:
 | INSTANCE CONSTRUCTOR COLON primary_datatype_pos 
   LBRACE instance_methods RBRACE                               { instance_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) (datatype $4) $6  }
-*)
+
 class_datatype:
 | SIG class_operator COLON datatype SEMICOLON                  { (binder ~ppos:$loc($2) $2, datatype $4) }
 

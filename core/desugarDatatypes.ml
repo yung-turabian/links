@@ -404,20 +404,15 @@ object (self)
 
 
   method! bindingnode = function
-    (*| Class c ->
-      Debug.print "Running DesugarDatatypes";
-
-      let class_name = c.class_name in
+    | ClassDecl (name, qs) ->
 
       (* TODO: create constraint here *)
 
-      Debug.print ("Creating constraint " ^ class_name);
+      Debug.print ("Creating constraint " ^ name);
       
-      let class_tyvars = c.class_tyvars in
-
-      (* Desugar all DTs *)
+      (*(* Desugar all DTs *)
       let class_methods =
-        (fun {class_methods; _} ->
+        (fun qs ->
           let methods = class_methods in
           List.map (fun (b, dt') ->
             (* Desugar the datatype *)
@@ -427,13 +422,10 @@ object (self)
               | _ -> raise (internal_error "Datatype not desugared")
             in (b, dt')
           ) methods
-        ) c 
-      in
-
-      let desugared_class = {class_name; class_tyvars; class_methods} in
+        ) qs 
+      in*)
          
-      Debug.print "Leaving DesugarDatatypes";
-      ({< subkind_env = subkind_env >}, Class desugared_class)*)
+      ({< subkind_env = subkind_env >}, ClassDecl (name, qs))
       
     | Aliases ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
@@ -538,6 +530,11 @@ object (self)
        let _, binder = self#binder binder in
        let datatype = Desugar.foreign alias_env datatype in
        self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
+    | ClassFun f ->
+      let binder, datatype = Class.fun' f in
+      let _, binder = self#binder binder in
+      let datatype = Desugar.datatype' alias_env datatype in
+      self, ClassFun (Class.modify ~funs:[(binder, datatype)] f)
     | b -> super#bindingnode b
 
 

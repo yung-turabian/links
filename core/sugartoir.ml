@@ -73,6 +73,28 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
 let lookup_effects (_, _, eff) = eff
 let with_effects (x, y, _) eff = (x, y, eff)
 
+(* Hashtable to track polymorphic class functions *)
+module PolyClassFunHash = Hashtbl.Make(struct
+  type t = string * Types.type_arg list  (* class name * type args *)
+  let equal (n1, targs1) (n2, targs2) = 
+    n1 = n2 && 
+    List.for_all2 (fun t1 t2 -> 
+      match (t1, t2) with
+      | (Types.Type t1, Types.Type t2) -> Types.concrete_type t1 = Types.concrete_type t2
+      | (Types.Row t1, Types.Row t2) -> Types.concrete_row t1 = Types.concrete_row t2
+      | (Types.Presence t1, Types.Presence t2) -> Types.concrete_presence t1 = Types.concrete_presence t2
+      | _ -> false
+    ) targs1 targs2
+  let hash (n, targs) = 
+    Hashtbl.hash (n, List.map (function
+      | Types.Type t -> Types.concrete_type t
+      | Types.Row r -> Types.concrete_row r
+      | Types.Presence p -> Types.concrete_presence p
+    ) targs)
+end)
+
+let polymorphic_class_funs : (var * var_info) PolyClassFunHash.t = PolyClassFunHash.create 17
+
 (* Hmm... shouldn't we need to use something like this? *)
 
 (* let with_mailbox_type t (nenv, tenv) = *)
@@ -209,7 +231,7 @@ sig
 
   val alien : var_info * string * ForeignLanguage.t * (var -> tail_computation sem) -> tail_computation sem
 
-  (*val class_method : var_info * Kind.t * (var -> tail_computation sem) -> tail_computation sem*)
+  val letcfun : var_info * (var -> tail_computation sem) -> tail_computation sem
 
   val select : Name.t * value sem -> tail_computation sem
 
@@ -301,7 +323,7 @@ struct
 
     val alien_binding : var_info * string * ForeignLanguage.t -> var M.sem
 
-    (*val class_method_binding : var_info * Kind.t -> var M.sem*)
+    val cfun_binding : var_info -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -358,6 +380,12 @@ struct
     let alien_binding (x_info, object_name, language) =
       let xb, x = Var.fresh_var x_info in
       lift_binding (Alien { alien_binder = xb; object_name; language }) x
+
+
+    let cfun_binding (x_info) =
+      let xb, x = Var.fresh_var x_info in
+      lift_binding (CFun { cfun_binder = xb }) x
+
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -575,8 +603,8 @@ struct
   let alien (x_info, object_name, language, rest) =
     M.bind (alien_binding (x_info, object_name, language)) rest
 
-  (*let class_method (x_info, kind, rest) =
-    M.bind (class_method_binding (x_info, kind)) rest*)
+  let letcfun (x_info, rest) =
+    M.bind (cfun_binding (x_info)) rest
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
@@ -851,8 +879,26 @@ struct
       let lookup_var name =
         let x, xt = lookup_name_and_type name env in
           I.var (x, xt) in
+
+      let instantiate_class_fun class_name type_args =
+        try 
+          let (var, info) = PolyClassFunHash.find polymorphic_class_funs (class_name, type_args) in
+          I.var (var, Var.info_type info)
+        with Not_found ->
+          (* Fall back to regular lookup if not polymorphic *)
+          lookup_var class_name
+      in
+
       let instantiate name tyargs =
-        let x, xt = lookup_name_and_type name env in
+        (* First check if this is a polymorphic class function *)
+        if String.contains name '.' then (* heuristic for class methods *)
+          match String.split_on_char '.' name with
+          | class_name::method_name::_ ->
+              instantiate_class_fun class_name tyargs
+          | _ -> lookup_var name
+        else
+          (* Regular function lookup *)
+          let x, xt = lookup_name_and_type name env in
           match tyargs with
             | [] -> I.var (x, xt)
             | _ ->
@@ -939,14 +985,11 @@ struct
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | UnaryAppl ((tyargs, UnaryOp.Name "negate"), e) ->
-            I.apply (instantiate_mb "negInt", [ev e])
-         (* | UnaryAppl ((tyargs, UnaryOp.Name n), e) when is_polymorphic ->
-            I.apply (instantiate n tyargs, [ev e])*)
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
-              I.apply (instantiate n tyargs, [ev e])
+              Debug.print ("\t UnaryAppl: " ^ n);
+              I.apply (instantiate_mb "boolToString", [ev e])
           | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
@@ -1307,17 +1350,29 @@ struct
                       I.letfun
                         (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
-                | ClassFun f ->
-                  let binder = fst (Class.fun' f) in
+                | ClassFun fun' ->
+                  let binder = fst (Class.fun' fun') in
                   assert (Binder.has_type binder);
+                  let class_name = (Class.name fun') in
+                  let qs = (Class.quantifiers fun') in
+                  let tyvars = List.map (fun q -> SugarQuantifier.get_resolved_exn q) qs in
                   let f  = Binder.to_name binder in
                   let ft = Binder.to_type binder in
 
-                  (*I.letfun
-                    (Var.make_info ft f scope, [], Location.Client, true)
-                    (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)*)
+                  (* Track polymorphic class functions *)
+                  if not (List.is_empty tyvars) then begin
+                    let type_args = List.map (fun q -> Types.type_arg_of_quantifier q) tyvars in
+                    let class_name = String.concat "." (List.rev class_name) in
+                    let f_var = snd (Var.fresh_var (Var.make_info ft f scope)) in
+                    PolyClassFunHash.add polymorphic_class_funs (class_name, type_args) (f_var, Var.make_info ft f scope)
+                  end;
 
-                  eval_bindings scope env bs e
+
+                  (** TODO: prefix with subkind name *)
+                  let f_new = String.concat class_name [f] in
+                  
+                  I.letcfun (Var.make_info ft f_new scope,
+                    fun v -> eval_bindings scope (extend [f_new] [(v, ft)] env) bs e)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
@@ -1367,6 +1422,7 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                | ClassDecl _
                 | Aliases _
                 | Instance _
                 | Infix _ ->
@@ -1435,6 +1491,11 @@ struct
                    when Var.Scope.is_global (Var.scope_of_binder alien_binder) ->
                  let f = Var.var_of_binder alien_binder in
                  let f_name = Var.name_of_binder alien_binder in
+                 partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
+              | CFun { cfun_binder; _ }
+                   when Var.Scope.is_global (Var.scope_of_binder cfun_binder) ->
+                 let f = Var.var_of_binder cfun_binder in
+                 let f_name = Var.name_of_binder cfun_binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
               | _ -> partition (globals, b::locals, nenv) bs
             end in

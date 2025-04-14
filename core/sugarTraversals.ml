@@ -803,6 +803,7 @@ class map =
         let name = o#name (Class.name c) in
         let quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
         Class (Class.modify ~name ~quantifiers ~funs c)
+      | ClassDecl (s, qs) -> let (_s, _qs) = o#subkind_class (s, qs) in ClassDecl (_s, _qs)
       | Instance i -> Instance (o#instance_definition i)
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
@@ -843,6 +844,17 @@ class map =
     method alias : alias -> alias =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#aliasnode p
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> (Name.t * SugarQuantifier.t list) =
+      fun (name, quantifiers) ->
+      let name = o#name name in
+      let quantifiers = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      (name, quantifiers)
 
     (*method subkind_class_definition : subkind_class_definition -> subkind_class_definition 
       = fun { class_name;
@@ -1649,6 +1661,7 @@ class fold =
           (fun o (b, dt) ->
             let o = o#binder b in o#datatype' dt)
           (Class.funs c)
+      | ClassDecl (s, qs) -> o#subkind_class (s, qs)
       | Instance i -> o#instance_definition i
     method binding : binding -> 'self_type =
       WithPos.traverse
@@ -1677,6 +1690,17 @@ class fold =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#aliasnode v)
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> 'self_type =
+      fun (name, quantifiers) ->
+      let o = o#name name in
+      let o = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      o
 
     (*method subkind_class_definition : subkind_class_definition -> 'self
       = fun { class_name;
@@ -2638,6 +2662,9 @@ class fold_map =
           (Class.funs c)
         in
         o, Class (Class.modify ~name ~quantifiers ~funs c)
+      | ClassDecl (s, qs) ->
+        let o, (_s, _qs) = o#subkind_class (s, qs) in
+        (o, ClassDecl (_s, _qs))
       | Instance i -> let o, i = o#instance_definition i in o, Instance i
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
@@ -2679,6 +2706,17 @@ class fold_map =
       function
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
         | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
+
+    method subkind_class : (Name.t * SugarQuantifier.t list) -> ('self_type * (Name.t * SugarQuantifier.t list)) =
+      fun (name, quantifiers) ->
+      let o, name = o#name name in
+      let o, quantifiers = 
+        o#list 
+          (fun o quant -> 
+            o#quantifier quant) 
+          quantifiers 
+      in
+      (o, (name, quantifiers))
 
     (*method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition
       = fun { class_name;

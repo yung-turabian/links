@@ -508,6 +508,9 @@ struct
         | Alien ({ alien_binder; _ } as payload) ->
             let o, alien_binder = o#binder alien_binder in
             o, Alien { payload with alien_binder}
+        | CFun ({ cfun_binder; _ } as payload) ->
+          let o, cfun_binder = o#binder cfun_binder in
+          o, CFun { payload with cfun_binder}
         | Module (name, defs) ->
             let o, defs =
               match defs with

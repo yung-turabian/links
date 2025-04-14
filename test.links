@@ -6,25 +6,58 @@ typename Nat = [|Zero|Succ:Nat|];
 #class Base2;
 
 # In this case the operator + takes on the kind Numeric.
-class Num : (a::(Unl, Base)) {
+class Num : (a::Base) {
+		sig + : (a, a) -> a;
+		sig * : (a, a) -> a;
 		sig `negate` : (a) -> a;
 }
 
+infix 4 ==;
+infix 4 <>;
+
 #class Eq : (a) {
 #		sig == : (a, a) -> a;
+#		sig <> : (a, a) -> a;
 #}
 
 #instance Num : Int {
+#		+ : addInt;
+#		* : mulInt;
 #		`negate` : negInt;
 #}
 
-#sig dummy : (a::Num) -> a
-#fun dummy (x) {
-#		x
+#instance Num : Nat {
+#		+ : addNat;
+#		* : mulNat;
+#		`negate` : negNat;
 #}
 
-`negate` 2
+#instance Eq : Int {
+#		== : eqInt;
+#}
 
+
+sig dummy : (a::Num) -> a
+fun dummy (x) {
+		x
+}
+
+
+sig square : (a::Num) -> a
+fun square(x) {
+		x * x
+}
+
+class Show : (a) {
+		sig `show` : (a) ~> String;
+}
+
+instance Show : Bool {
+		`show` : "True";
+}
+
+
+`show` true
 
 # Sees that + is already defined with a kind signature, now has
 # to update the signature to refelect a wider quantifier.
@@ -47,10 +80,5 @@ class Num : (a::(Unl, Base)) {
 
 #instance Num : Float {
 #		negate : negFloat;
-#}
-
-#sig square : (a::Num) -> a
-#fun square(x) {
-#		x * x
 #}
 

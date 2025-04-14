@@ -73,6 +73,10 @@ and alien_def =
     language: ForeignLanguage.t;
     object_name: string 
   }
+and class_fun_def =
+  {
+    cfun_binder: binder;
+  }
 and temporal_update =
   | ValidTimeUpdate of valid_time_update
   | TransactionTimeUpdate
@@ -99,6 +103,7 @@ and binding =
   | Rec        of fun_def list
   | Alien      of alien_def
   | Module     of string * binding list option
+  | CFun       of class_fun_def
 and special =
   | Wrong      of Types.t
   | Database   of value
@@ -147,6 +152,7 @@ let binding_scope : binding -> scope =
   | Fun {fn_binder = binder; _}
   | Rec ({fn_binder = binder; _}::_)
   | Alien {alien_binder = binder; _} -> Var.scope_of_binder binder
+  | CFun {cfun_binder = binder; _} -> Var.scope_of_binder binder
   | Rec []
   | Module _ -> assert false
 

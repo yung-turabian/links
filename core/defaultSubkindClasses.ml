@@ -61,10 +61,10 @@ let subkind_env : Types.subkind_environment =
       SignatureEnv.empty
     [ 
       "Mono"     , `Decl (pk_type, (lin_any, "Mono"));
-      "Any"     , `Decl (pk_type, (lin_any, "Any"));
-      "Lin"     , `Decl (pk_type, (lin_unl, "Any")); (* for linear effect vars *)
-      "Base"    , `Decl (pk_type, (lin_unl, "Base"));
-      "Session" , `Decl (pk_type, (lin_any, "Session"));
-      "Eff"     , `Decl (pk_row , (default_effect_lin, "Effect"));
-      (*"Num"     , `Class ((pk_type , (lin_unl, "Effect")), [], []);*)
+      "Any"      , `Decl (pk_type, (lin_any, "Any"));
+      "Lin"      , `Decl (pk_type, (lin_unl, "Any")); (* for linear effect vars *)
+      "Base"     , `Decl (pk_type, (lin_unl, "Base"));
+      "Session"  , `Decl (pk_type, (lin_any, "Session"));
+      "Eff"      , `Decl (pk_row , (default_effect_lin, "Effect"));
+      (*"Num"    , `Class ((pk_type , (lin_unl, "Effect")), [], []);*)
     ]

@@ -740,6 +740,7 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
+| `SukindClassFunction of string
 | `ClientDomRef of int
 | `ClientFunction of string
 | `ClientClosure of int
@@ -791,6 +792,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `ClientClosure _
   | `ClientFunction _ -> fprintf ppf "fun"
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
+  | `SukindClassFunction name -> fprintf ppf "%s" name
   | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
   | `Variant (label, (`Record _ as value)) -> fprintf ppf "@{<constructor>%s@}@[%a@]" label p_value value

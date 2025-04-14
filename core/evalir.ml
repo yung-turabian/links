@@ -561,6 +561,12 @@ struct
             let var = Var.var_of_binder alien_binder in
             let scope = Var.scope_of_binder alien_binder in
             computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
+        | CFun { cfun_binder; _ } ->
+            let var = Var.var_of_binder cfun_binder in
+            let name = Var.name_of_binder cfun_binder in
+            let scope = Var.scope_of_binder cfun_binder in
+            let class_fn_value = `SukindClassFunction name in
+            computation (Value.Env.bind var (class_fn_value, scope) env) cont (bs, tailcomp)
          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   ->

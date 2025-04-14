@@ -21,6 +21,7 @@ struct
     | Fun def -> add fs def
     | Rec defs -> List.iter (add fs) defs
     | Alien _ -> ()
+    | CFun _ -> ()
     | Module _ ->
         raise (Errors.internal_error
           ~filename:"buildTables.ml"
@@ -237,9 +238,13 @@ struct
 
             o#close_cont (IntSet.union fvs fvs') bs
         | Alien { alien_binder; _ } :: bs ->
-           let f = Var.var_of_binder alien_binder in
-           let fvs = IntSet.remove f fvs in
-           o#close_cont fvs bs
+          let f = Var.var_of_binder alien_binder in
+          let fvs = IntSet.remove f fvs in
+          o#close_cont fvs bs
+        | CFun { cfun_binder; _ } :: bs ->
+          let f = Var.var_of_binder cfun_binder in
+          let fvs = IntSet.remove f fvs in
+          o#close_cont fvs bs
         | Module _::_ ->
             assert false
 

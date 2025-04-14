@@ -1240,34 +1240,42 @@ class main_traversal simple_tycon_env =
             SourceCode.WithPos.make ~pos (name, args, dt')
           in
 
+
           let ts' = List.map traverse_body ts in
           ({<tycon_env>}, Aliases ts')
-      (*| Class c as b -> 
-        Debug.if_set (CommonTypes.show_subkindclasses)
-          (fun () -> ("Entering desugarEffects"));
-        
-        let implicits_allowed =
-          match c.class_methods with
-          | [] ->
-            Debug.print "Empty class methods list";
-            false
-          | (_, dt)::_ -> 
-            try 
-              DesugarTypeVariables.sig_allows_implicitly_bound_vars (Some dt)
-            with exn ->
-              Debug.print ("Warning: Error checking implicit vars: " ^ Printexc.to_string exn);
-              false
-        in
+      | ClassDecl (s, qs) -> 
+        (*let open SourceCode.WithPos in
+        let tycon_env, sk =
+          List.fold_left
+            (fun (subkind_env, sks) { node = t, args, _; _ } ->
+              let params =
+                List.map
+                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                  args
+              in
+              (* initially pretend that no type needs an implict parameter *)
+              (* TODO                                vvvv ??? *)
+              let env' = SEnv.bind t (params, false, None) subkind_env in
+              let tycons' = StringSet.add t tycons in
+              (env', tycons'))
+            (tycon_env, StringSet.empty)
+            ts
+        in*)
+        (o, ClassDecl (s, qs))
+      | ClassFun f as b -> 
 
-        let o = o#set_allow_implictly_bound_vars implicits_allowed in
+        (*let implicits_allowed =
+          DesugarTypeVariables.sig_allows_implicitly_bound_vars (snd (Class.fun' f))
+        in*)
+        
+
+        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
 
         let o, b = o#super_bindingnode b in
 
         let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
 
-        Debug.if_set (CommonTypes.show_subkindclasses)
-        (fun () -> ("Exiting desugarEffects"));
-        (o, b)*)
+        (o, b)
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype

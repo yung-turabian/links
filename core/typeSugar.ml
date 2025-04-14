@@ -153,6 +153,7 @@ struct
     | Import _
     | Open _
     | AlienBlock _
+    | ClassDecl _
     | ClassFun _
     | Class _
     | Instance _
@@ -1704,10 +1705,13 @@ let lookup_effect    context name   =
   | _ -> raise (internal_error "Effect row in the context is not a row")
 
 let lookup_subkind context name =
-  match Env.find name context.subkind_env with
-  | `Class ((pk, (lin, res)), qs, methods) -> 
-      Some ( ((pk, (lin, res)), qs, methods) )
-  | _ -> failwith "Only classes have quantifiers!"
+  try
+    match Env.find name context.subkind_env with
+    | `Class ((pk, (lin, res)), qs, methods) -> 
+        Some ( ((pk, (lin, res)), qs, methods) )
+    | _ -> raise (internal_error "Subkind not found")
+  with NotFound _ -> failwith "subkind not found"
+
 
 
 let lookup_subkind_quantifiers context name =
@@ -3699,7 +3703,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | UnaryAppl ((_, op), p) ->
           let open UnaryOp in
           let tyargs, opt, op_usage = type_unary_op pos context op in
-          let (_, t, _) as p = tc p
+          let p = tc p
           and rettyp = Types.fresh_type_variable (lin_any, res_any) in
             unify ~handle:Gripers.unary_apply
               ((to_string op, opt),
@@ -3707,11 +3711,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage
         | InfixAppl ((_, op), l, r) ->
             let tyargs, opt, op_usages = type_binary_op pos context op in
-            Debug.print ("OP: " ^ (BinaryOp.to_string op) ^ " " ^ (Types.string_of_datatype opt));
-            let (_, t1, _) as l = tc l
-            and (_, t2, _) as r = tc r
+            let l = tc l
+            and r = tc r
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
-              Debug.print ("Operating on " ^ (Types.string_of_datatype t1) ^ (Types.string_of_datatype t2));
               unify ~handle:Gripers.infix_apply
                 ((BinaryOp.to_string op, opt),
                  no_pos (T.Function (Types.make_tuple_type [typ l; typ r],
@@ -5243,25 +5245,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 | _ -> raise (internal_error "typeSugar.ml: unannotated type alias")
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)
-      | ClassFun f ->
-        let binder, dt, datatype =
-          match Class.fun' f with
-          | (b, (dt, Some datatype)) -> (b, dt, datatype)
-          | _ -> assert false
-        in
-        let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-        let datatype = Instantiate.freshen_quantifiers datatype in
-        let binder = Binder.set_type binder datatype in
-        ( ClassFun (Class.modify ~funs:[(binder, (dt, Some datatype))] f)
-        , bind_var empty_context ((Binder.to_name binder), datatype)
-        , Usage.empty )
+
       (** [subkind_binding] case for Subkind Classes *)
-      (*| Class { class_name; class_tyvars; class_methods } ->
+      | ClassDecl (name, qs) ->
 
-          Debug.if_set (CommonTypes.show_subkindclasses)
-            (fun () -> ("Entering typeSugar"));
-
-          let class_methods =
+          (*let class_methods =
             List.map (fun (bndr, dt') ->
               let _dt, datatype =
                 match dt' with
@@ -5270,10 +5258,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               in
               let (_tyvars, _args), _datatype = Utils.generalise context.var_env datatype in
               (bndr, dt')
-            ) class_methods in
+            ) class_methods in*)
         
-          let env = (fun env (class_name, class_tyvar, class_methods) ->
-
+          (*let env = (fun env (class_name, class_tyvar) ->
+            
             let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in  
             let pks = List.map (Quantifier.to_primary_kind) qs in
             let pk = 
@@ -5287,32 +5275,109 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | [] -> CommonTypes.default_subkind
               | _ -> List.hd sks 
             in
-            let method_binders = List.map fst class_methods in
 
-            (* Defaults to restriciton of its own name *)
-            let ctx = bind_subkind env (class_name, `Class ((pk, sk), qs, method_binders))
-            in
-            List.fold_left (fun env (bndr, dt') ->
-              let _dt, datatype =
-                match dt' with
-                | (dt, Some datatype) -> (dt, datatype)
-                | _ -> assert false
-              in
-
-              bind_var env (bndr, datatype)
-            ) ctx class_methods
-
-            (*bind_subkind env (class_name, `Class ((pk, sk), qs, method_binders))*)
+            bind_subkind env (class_name, `Class ((pk, sk), qs, []))
             
-          ) empty_context (class_name, class_tyvars, class_methods) in
+          ) empty_context (name, qs) in*)
           
-          Debug.if_set (CommonTypes.show_subkindclasses)
-            (fun () -> ("Exiting typeSugar"));
 
-          (Class { class_name; class_tyvars; class_methods }, env, Usage.empty)*)
+          (ClassDecl (name, qs), empty_context, Usage.empty)
+
+      | ClassFun f ->
+        let binder, dt, datatype =
+          match Class.fun' f with
+          | (b, (dt, Some datatype)) -> (b, dt, datatype)
+          | _ -> assert false
+        in
+        let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
+        let datatype = Instantiate.freshen_quantifiers datatype in
+        let binder = Binder.set_type binder datatype in
+        let env = bind_var empty_context ((Binder.to_name binder), datatype) in
+
+        (** HACK: Naive and only will work for very general cases. *)
+        let env = (fun env (class_name, class_tyvar) ->
+            let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in  
+            let pks = List.map (Quantifier.to_primary_kind) qs in
+            let pk = 
+              match pks with (** Already checked in desugarTypeVariables, as with {sks} *)
+              | [] -> pk_type
+              | _ -> List.hd pks 
+            in
+            let sks = List.map (Quantifier.to_subkind) qs in
+            let sk = 
+              match sks with
+              | [] -> CommonTypes.default_subkind
+              | _ -> List.hd sks 
+            in
+
+            bind_subkind env (class_name, `Class ((pk, sk), qs, []))
+            
+          ) env ((Class.name f), (Class.quantifiers f)) 
+        in
+        
+        ( ClassFun (Class.modify ~funs:[(binder, (dt, Some datatype))] f)
+        , env
+        , Usage.empty )
+
       | Instance i ->
+          let class_name = Binder.to_name i.instance_binder in
+          let pk, sk, qs, funs = match lookup_subkind context class_name with
+            | Some ( (pk, sk), qs, methods ) -> 
+                pk, sk, qs, methods
+            | None   ->  failwith ("Class not found: " ^ class_name)
+          in
+
+          let new_funs = i.instance_methods in
+
+          let env = (fun env  ->
+              bind_subkind env (
+                class_name, `Class ((pk, sk), qs, [])
+              )
+              
+            ) empty_context 
+          in
+
 
         (Instance i, empty_context, Usage.empty)
+        (*let env = (fun env { instance_binder; _
+                               } -> 
+            bind_subkind env (
+              (Binder.to_name instance_binder),
+              
+              )
+          ) empty_context i in*)
+
+        (*Sugartypes.add_implementation Sugartypes.OperationMap*)
+
+        (*List.iter (fun (m, p) -> Debug.print m ) i.instance_methods;*)
+
+              (*| Instance i -> 
+        let env = (fun env { instance_binder; 
+                                 instance_type; 
+                                 instance_methods } ->
+          let name = Binder.to_name instance_binder in
+            Debug.print ("Updating class: " ^ name);
+          let qs = lookup_subkind_quantifiers context.subkind_env name in
+          let _ty = instance_type in
+          let (env, ops) = 
+            List.fold_left (fun (env_acc, ops_acc) (op, body) -> 
+              let body_string = Format.asprintf "%a" pp_phrase body in
+              Debug.print ("\tUpdating class operator " ^ op  ^ " : " ^ body_string);
+              let body = tc body in
+
+              (*let bt =
+                match datatype with
+                  | Some (_, Some t) ->
+                      unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
+                      t
+                  | _ -> typ body in*)
+              
+              (env_acc, op :: ops_acc) 
+            ) (env, []) instance_methods in
+          bind_subkind env (name, `Class ((pk_type, (lin_any, name)), qs, ops))
+        ) empty_context i in
+        
+        (Instance i, env, Usage.empty)*)
       (** [subkind_binding] case for Subkind Classes *)
       (*| Class {class_binder; class_tyvar; class_methods} ->
 
@@ -5422,33 +5487,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             {empty_context with
               var_env = penv},
             usage*)
-      (*| Instance i -> 
-        let env = (fun env { instance_binder; 
-                                 instance_type; 
-                                 instance_methods } ->
-          let name = Binder.to_name instance_binder in
-            Debug.print ("Updating class: " ^ name);
-          let qs = lookup_subkind_quantifiers context.subkind_env name in
-          let _ty = instance_type in
-          let (env, ops) = 
-            List.fold_left (fun (env_acc, ops_acc) (op, body) -> 
-              let body_string = Format.asprintf "%a" pp_phrase body in
-              Debug.print ("\tUpdating class operator " ^ op  ^ " : " ^ body_string);
-              let body = tc body in
-
-              (*let bt =
-                match datatype with
-                  | Some (_, Some t) ->
-                      unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
-                      t
-                  | _ -> typ body in*)
-              
-              (env_acc, op :: ops_acc) 
-            ) (env, []) instance_methods in
-          bind_subkind env (name, `Class ((pk_type, (lin_any, name)), qs, ops))
-        ) empty_context i in
-        
-        (Instance i, env, Usage.empty)*)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
