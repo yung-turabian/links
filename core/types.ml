@@ -218,7 +218,7 @@ type tycon_spec = [
 
 type subkind_spec = [
   | `Decl of Kind.t (** For simple subkind creation without related methods *)
-  | `Class of (Kind.t * Quantifier.t list * (Name.t * datatype) list) (** Subkind class creation, kind & key for methods-map *)
+  | `Class of (Kind.t * Quantifier.t list * datatype StringMap.t) (** Subkind class creation, kind & key for methods-map *)
 ] [@@deriving show]
 
 (* Generation of fresh type variables *)

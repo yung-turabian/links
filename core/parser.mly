@@ -513,14 +513,14 @@ class_operator:
 
 // HACK Something better than variable? Check exp stuff, atomic_expression
 instance_method:
-| class_operator COLON exp SEMICOLON                           { ($1, $3) }
+| class_operator COLON exp SEMICOLON                           { ($1, ([], [], $3)) }
 
 instance_methods:
 | instance_method+                                             { $1 }
 
 instance_declaration:
 | INSTANCE CONSTRUCTOR COLON primary_datatype_pos 
-  LBRACE instance_methods RBRACE                               { instance_binding ~ppos:$loc($1) (binder ~ppos:$loc($2) $2) (datatype $4) $6  }
+  LBRACE instance_methods RBRACE                               { instance_binding ~ppos:$loc($1) $2 (datatype $4) $6  }
 
 class_datatype:
 | SIG class_operator COLON datatype SEMICOLON                  { (binder ~ppos:$loc($2) $2, datatype $4) }
@@ -531,7 +531,7 @@ class_datatypes:
 subkind_block:
 | CLASS name=CONSTRUCTOR COLON quantifiers=typeargs_opt 
   LBRACE funs=class_datatypes RBRACE                        {
-                                                                  with_pos $loc(Class (Class.multi name quantifiers funs))
+                                                                  with_pos $loc (Class (Class.multi name quantifiers funs))
                                                                }
 
 subkind_decl:

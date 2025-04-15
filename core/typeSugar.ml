@@ -1713,13 +1713,14 @@ let lookup_subkind context name =
   with NotFound _ -> failwith "subkind not found"
 
 
-
-let lookup_subkind_quantifiers context name =
+(** Defaults to an empty map if subkind doesn't exist *)
+let lookup_subkind_map context name =
   try
-    match Env.find name context with
-    | `Class (_, qs, _) -> qs
-    | _ -> failwith "?"
-  with NotFound _ -> failwith "subkind not found"
+    match Env.find name context.subkind_env with
+    | `Class (_, _, map) -> map
+    | `Decl _ -> failwith "Requestion map from subkind declaration"
+    | _ -> StringMap.empty
+  with NotFound _ -> StringMap.empty
 
 
 module LinCont = struct
@@ -2002,7 +2003,6 @@ let datatype subkinds aliases = Instantiate.typ -<- DesugarDatatypes.read ~subki
 let add_usages (p, t) m = (p, t, m)
 let add_empty_usages (p, t) = (p, t, Usage.empty)
 
-(* TODO: Retrieves polymorphic operators as well.*)
 let type_unary_op pos env =
   let open UnaryOp in
   let datatype = datatype env.subkind_env env.tycon_env  in
@@ -5309,8 +5309,12 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | [] -> CommonTypes.default_subkind
               | _ -> List.hd sks 
             in
+            
+            let old_map = lookup_subkind_map context class_name in
 
-            bind_subkind env (class_name, `Class ((pk, sk), qs, []))
+            (* HACK: naively setting quantifiers for whole class as in this build
+               this isn't as much as a concern. *)
+            bind_subkind env (class_name, `Class ((pk, sk), qs, (StringMap.add (Binder.to_name binder) datatype old_map) ))
             
           ) env ((Class.name f), (Class.quantifiers f)) 
         in
@@ -5319,26 +5323,98 @@ and type_binding : context -> binding -> binding * context * Usage.t =
         , env
         , Usage.empty )
 
-      | Instance i ->
-          let class_name = Binder.to_name i.instance_binder in
-          let pk, sk, qs, funs = match lookup_subkind context class_name with
+
+      | Instance (class_name, dt, instances) ->
+
+          let _pk, _sk, _qs, _funs = match lookup_subkind context class_name with
             | Some ( (pk, sk), qs, methods ) -> 
                 pk, sk, qs, methods
             | None   ->  failwith ("Class not found: " ^ class_name)
           in
 
-          let new_funs = i.instance_methods in
+          let datatype =
+            match dt with
+            | (_dt, Some datatype) -> datatype
+            | _ -> assert false
+          in
+          
+          (* Ensure that we quantify FTVs *)
+          (*let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
+          let datatype = Instantiate.freshen_quantifiers datatype in*)
+          let string_of_type_args type_args =
+            let strs = ( List.map (fun ty -> Types.string_of_type_arg ty) type_args) in
+            String.concat ", " strs
+          in
 
-          let env = (fun env  ->
+
+          (*TODO: datatype here will instantiate anonumous variables with type. *)
+          let instances =
+            List.fold_right
+              (fun (pat, (_qs, _tyargs, body)) bindings ->
+                (*let pat = tpc pat in
+                  let penv = pattern_env pat in*)
+
+                let map = lookup_subkind_map context class_name in
+                let dt' = StringMap.find pat map in
+                let dt' = Instantiate.freshen_quantifiers dt' in
+                let (tyargs, dt') = Instantiate.typ dt' in
+
+                let body = tc body in
+                let bt = 
+                  unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos dt');
+
+                  (*let env' = empty_context in
+                  let env' = bind_var env' (pat, dt') in
+
+                  let (_tyvars, _args), dt' = Utils.generalise env'.var_env dt' in*)
+
+                  (** TODO: perhaps do this in ClassFun *)
+                  (*let (_, instantiated_type) = Instantiate.typ dt' in*)
+                  (*let instantiated = Instantiate.apply_type dt' args in
+                  Debug.print ("DDDD" ^ Types.string_of_datatype instantiated);*)
+                  dt'
+                in
+
+                (*
+                let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in*)
+
+                (*Types.Mono.make_type (pattern_typ pat);*)
+
+                let _usage = usages body in
+                let body = erase body in
+                
+                let tyvars(*, pat, penv*) =
+                  if Utils.is_generalisable body then
+                    (*let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
+                    let pat = update_pattern_vars penv (erase_pat pat) in*)
+                    let ((tyvars, args), _bt) = Generalise.generalise context.var_env bt in
+                    tyvars(*, pat, penv*)
+                  else
+                    failwith "bad choice"
+                    (*(* All rigid type variables in bt should appear in the
+                      environment *)
+                    let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
+                    match tyvars with
+                    | [] -> [], erase_pat pat, penv
+                    | _ -> Gripers.value_restriction pos bt*)
+                in
+
+                let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
+                    
+                (pat, (sugar_tyvars, tyargs, body)) :: bindings)
+                instances []
+          in
+
+          (*let env = (fun env  ->
               bind_subkind env (
                 class_name, `Class ((pk, sk), qs, [])
               )
               
             ) empty_context 
-          in
+          in*)
 
-
-        (Instance i, empty_context, Usage.empty)
+        (Instance (class_name, dt, instances)
+                , empty_context, Usage.empty)
         (*let env = (fun env { instance_binder; _
                                } -> 
             bind_subkind env (
@@ -5490,7 +5566,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
-          let (_, typ, _) = e in
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e

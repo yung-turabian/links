@@ -669,7 +669,7 @@ object (o : 'self)
       (* Add all type declarations in the group to the alias
        * environment, as mutuals. Quantifiers need to be desugared. *)
       let mutual_env = 
-        SEnv.bind name (`Class ((pk_type, default_subkind), [], [])) subkind_env 
+        SEnv.bind name (`Class ((pk_type, default_subkind), [], StringMap.empty)) subkind_env 
       in
 
       let make_parents rest = 
@@ -796,7 +796,7 @@ object (o : 'self)
           | Some pk, Some sk -> pk, sk
           | _ -> failwith "Did not resolve kind, unknown why kinds can't be definite in KResolved."
         in
-        pk, sk, SEnv.bind name (`Class ((pk, sk), [], [])) subkind_env 
+        pk, sk, SEnv.bind name (`Class ((pk, sk), [], StringMap.empty)) subkind_env 
       in
 
       let info = {
@@ -848,7 +848,8 @@ object (o : 'self)
       let subkind_env = 
         let kinds = List.map Quantifier.to_kind qs in
         let kind = List.hd kinds in
-        SEnv.bind class_name (`Class (kind, qs, [])) subkind_env 
+        (** NOTE: Not binding functions yet as datatypes are not resolved. *)
+        SEnv.bind class_name (`Class (kind, qs, StringMap.empty)) subkind_env 
       in
 
       Debug.print ("Class fun `" ^ fun_name ^ "` has quantifiers:");

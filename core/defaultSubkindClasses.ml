@@ -51,14 +51,13 @@
 open CommonTypes
 
 (* Subkind (Class) environment *)
-module SignatureEnv = Env.String
+module SubkindEnv = Env.String
 
-(* TODO: subkinds' signatures are optional*)
 let subkind_env : Types.subkind_environment = 
   List.fold_left
     (fun env (name, t) ->
-      SignatureEnv.bind name t env)
-      SignatureEnv.empty
+      SubkindEnv.bind name t env)
+      SubkindEnv.empty
     [ 
       "Mono"     , `Decl (pk_type, (lin_any, "Mono"));
       "Any"      , `Decl (pk_type, (lin_any, "Any"));

@@ -321,9 +321,8 @@ module Class: sig
   and phrase 
     [@@deriving show]
 
-  
-
-  val body : 'a t -> phrase list
+  (* TODO: this body attribute isn't really necessary (nor is it used rn) *)
+  val body : 'a t -> (Types.datatype * phrase) list
   val quantifiers : 'a t -> SugarQuantifier.t list
   val name : 'a t -> Name.t
   val funs : 'a t -> (Binder.with_pos * datatype') list
@@ -332,11 +331,11 @@ module Class: sig
     ?name:Name.t -> 
     ?quantifiers:SugarQuantifier.t list ->
     ?funs:(Binder.with_pos * datatype') list -> 
-    ?body:phrase list -> 
+    ?body:(Types.datatype * phrase) list -> 
     'a t -> 'a t  
 
   val multi : Name.t -> SugarQuantifier.t list -> (Binder.with_pos * datatype') list -> multi t
-  val single : Name.t -> SugarQuantifier.t list -> phrase list -> Binder.with_pos -> datatype' -> single t
+  val single : Name.t -> SugarQuantifier.t list -> (Types.datatype * phrase) list -> Binder.with_pos -> datatype' -> single t
 
 end = struct
   type single = unit
@@ -352,7 +351,7 @@ end = struct
     | Single of { common: common;
                   binder: Binder.with_pos;
                   datatype: datatype';
-                  body: phrase list }
+                  body: (Types.datatype * phrase) list }
     | Multi of {  common: common;
                   funs: (Binder.with_pos * datatype') list }
   [@@deriving show]
@@ -382,7 +381,7 @@ end = struct
   ?name:Name.t -> 
   ?quantifiers:SugarQuantifier.t list ->
   ?funs:(Binder.with_pos * datatype') list -> 
-  ?body:phrase list -> 
+  ?body:(Types.datatype * phrase) list -> 
   a t -> a t =
   fun ?name ?quantifiers ?funs ?body -> function
     | Single ({ common; binder; datatype; body = old_body } as single) ->
@@ -426,27 +425,6 @@ end = struct
   let single name quantifiers body binder datatype =
     Single { common = { name; quantifiers }; binder; datatype; body }
 end
-
-module DatatypeKey = struct
-  type t = Types.datatype
-    [@@deriving show]
-  let compare = compare (* or implement custom comparison *)
-end
-
-module DatatypeMap = Map.Make(DatatypeKey)
-module OperationMap = Map.Make(String)
-
-type code_lookup = string DatatypeMap.t OperationMap.t
-
-let empty = OperationMap.empty
-
-let add_implementation db op_name datatype code =
-  let type_map = 
-    OperationMap.find_opt op_name db
-    |> Option.value ~default:DatatypeMap.empty
-  in
-  OperationMap.add op_name (DatatypeMap.add datatype code type_map) db
-
 
 module Alien: sig
   type 'a t [@@deriving show]
@@ -731,7 +709,7 @@ and bindingnode =
   | Module   of module_definition
   | AlienBlock  of Alien.multi Alien.t
   | Class    of Class.multi Class.t
-  | Instance of instance_definition
+  | Instance of Name.t * datatype' * (Name.t * (SugarQuantifier.t list * tyarg list *  phrase)) list
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -778,11 +756,6 @@ and subkind_class_definition = {
   class_binder: Binder.with_pos;
   class_tyvar: SugarQuantifier.t list; (* NOTE: the super-class-like feature will be derived from quantifer notation. i.e. class Ord : (a::Eq) ... *)
   class_methods: (Binder.with_pos * datatype') list;
-}
-and instance_definition = {
-  instance_binder: Binder.with_pos;
-  instance_type: datatype';
-  instance_methods: (Name.t * phrase) list;
 }
   [@@deriving show]
 
@@ -1027,15 +1000,16 @@ struct
             (WithPos.nodes_of_list funs)
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | Instance { instance_methods; _} ->
-      let bound_methods =
+    | Instance ( _class', _typ, methods ) ->
+        let bound_instances, free_rhss =
         List.fold_left
-          (fun acc (op, _) ->
-            StringSet.add (op) acc)
-          (StringSet.empty)
-          instance_methods
+          (fun (bound_acc, free_acc) (method_name, (_qs, _tyargs, rhs)) ->
+            let rhs = phrase rhs in
+            (StringSet.add method_name bound_acc, union free_acc rhs))
+          (StringSet.empty, empty)
+          methods
       in
-      bound_methods, empty
+      bound_instances, free_rhss
     | Import _
     | Open _
     | Aliases _ -> empty, empty

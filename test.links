@@ -5,6 +5,10 @@ typename Nat = [|Zero|Succ:Nat|];
 
 #class Base2;
 
+#class Record : (a::Eff) {
+#		sig + : (a, a) -> a;
+#}
+
 # In this case the operator + takes on the kind Numeric.
 class Num : (a::Base) {
 		sig + : (a, a) -> a;
@@ -20,11 +24,11 @@ infix 4 <>;
 #		sig <> : (a, a) -> a;
 #}
 
-#instance Num : Int {
-#		+ : addInt;
-#		* : mulInt;
-#		`negate` : negInt;
-#}
+instance Num : Int {
+		+ : addInt;
+		* : mulInt;
+		`negate` : negInt;
+}
 
 #instance Num : Nat {
 #		+ : addNat;
@@ -48,16 +52,18 @@ fun square(x) {
 		x * x
 }
 
-class Show : (a) {
+class Show : (a::Type) {
 		sig `show` : (a) ~> String;
 }
 
 instance Show : Bool {
-		`show` : "True";
+		# Not supported yet, check transformSugar
+		#`show` : fun (x) { if (x == true) "True" else "False" };
+		`show` : boolToString;
 }
 
 
-`show` true
+2 + 2
 
 # Sees that + is already defined with a kind signature, now has
 # to update the signature to refelect a wider quantifier.

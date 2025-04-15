@@ -76,7 +76,7 @@ class map :
     method aliasbody       : aliasbody -> aliasbody
     method subkind_class   : (Name.t * SugarQuantifier.t list) -> (Name.t * SugarQuantifier.t list)
     (*method subkind_class_definition : subkind_class_definition -> subkind_class_definition*)
-    method instance_definition : instance_definition -> instance_definition
+    (*method instance_definition : instance_definition -> instance_definition*)
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
     method recursive_functionnode : recursive_functionnode -> recursive_functionnode
@@ -163,7 +163,7 @@ class fold :
     method aliasbody       : aliasbody -> 'self
     method subkind_class   : (Name.t * SugarQuantifier.t list) -> 'self
     (*method subkind_class_definition : subkind_class_definition -> 'self*)
-    method instance_definition : instance_definition -> 'self
+    (*method instance_definition : instance_definition -> 'self*)
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
     method recursive_functionnode  : recursive_functionnode -> 'self
@@ -192,7 +192,7 @@ object ('self)
   method aliasbody       : aliasbody -> 'self * aliasbody
   method subkind_class   : (Name.t * SugarQuantifier.t list) -> 'self * (Name.t * SugarQuantifier.t list)
   (*method subkind_class_definition : subkind_class_definition -> 'self * subkind_class_definition*)
-  method instance_definition : instance_definition -> 'self * instance_definition
+  (*method instance_definition : instance_definition -> 'self * instance_definition*)
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool

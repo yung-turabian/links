@@ -969,9 +969,30 @@ class transform (env : Types.typing_environment) =
 
 
         (o, ClassDecl (name, qs))
-      | Instance i ->
 
-        (o, Instance i)
+        (*| Val (p, (tyvars, e), location, t) ->
+          let outer_tyvars = o#backup_quantifiers in
+          let (o, tyvars) = o#quantifiers tyvars in
+          let (o, e, _) = o#phrase e in
+          let o = o#restore_quantifiers outer_tyvars in
+          let (o, p) = o#pattern p in
+          let (o, t) = optionu o (fun o -> o#datatype') t in
+          (o, Val (p, (tyvars, e), location, t))*)
+
+      | Instance (class_name, dt, instances) ->
+
+        let o, dt = o#datatype' dt in
+        let (o, instances) =
+          List.fold_right
+            (fun (pat, (qs, tyargs, body)) (o, bindings) ->
+              let (o, qs) = o#quantifiers qs in
+              (*let (o, tyargs) = o#type_arg' in*)
+              let (o, body, _) = o#phrase body in
+              (o, (pat, (qs, tyargs, body)) :: bindings))
+            (instances) (o, [])
+        in
+
+        (o, Instance (class_name, dt, instances))
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)

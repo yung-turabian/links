@@ -804,7 +804,29 @@ class map =
         let quantifiers = o#list (fun o -> o#quantifier) (Class.quantifiers c) in
         Class (Class.modify ~name ~quantifiers ~funs c)
       | ClassDecl (s, qs) -> let (_s, _qs) = o#subkind_class (s, qs) in ClassDecl (_s, _qs)
-      | Instance i -> Instance (o#instance_definition i)
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let _x = o#name _x in
+        let _x_i1 = o#datatype' _x_i1 in
+        let _x_i2 = 
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let n = o#name n in
+              let qs = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs
+              in
+              let tyargs =
+                o#list 
+                  (fun o -> o#tyarg) 
+                  tyargs
+              in
+              let e = o#phrase e in
+              (n, (qs, tyargs, e))
+            ) 
+            _x_i2
+        in  
+        Instance (_x, _x_i1, _x_i2)
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
@@ -874,7 +896,7 @@ class map =
         class_tyvars;
         class_methods }*)
 
-    method instance_definition : instance_definition -> instance_definition 
+    (*method instance_definition : instance_definition -> instance_definition 
       = fun { instance_binder;
               instance_type;
               instance_methods} ->
@@ -889,7 +911,7 @@ class map =
       in
       { instance_binder;
         instance_type;
-        instance_methods; }
+        instance_methods; }*)
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -1662,7 +1684,22 @@ class fold =
             let o = o#binder b in o#datatype' dt)
           (Class.funs c)
       | ClassDecl (s, qs) -> o#subkind_class (s, qs)
-      | Instance i -> o#instance_definition i
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let o = o#name _x in
+        let o = o#datatype' _x_i1 in
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let o = o#name n in
+              let o = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs 
+              (*let o =
+                o#list 
+                (fun o tyarg -> o#tyarg tyarg) 
+                tyargs*)
+              in o#phrase e) 
+          _x_i2
     method binding : binding -> 'self_type =
       WithPos.traverse
         ~o
@@ -1717,7 +1754,7 @@ class fold =
           in
           o*)
 
-    method instance_definition : instance_definition -> 'self
+    (*method instance_definition : instance_definition -> 'self
     = fun { instance_binder;
         instance_type;
         instance_methods
@@ -1730,7 +1767,7 @@ class fold =
             o#phrase p)
           (instance_methods)
         in
-        o
+        o*)
 
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
@@ -2665,7 +2702,29 @@ class fold_map =
       | ClassDecl (s, qs) ->
         let o, (_s, _qs) = o#subkind_class (s, qs) in
         (o, ClassDecl (_s, _qs))
-      | Instance i -> let o, i = o#instance_definition i in o, Instance i
+      | Instance ((_x, _x_i1, _x_i2)) -> 
+        let o, _x = o#name _x in
+        let o, _x_i1 = o#datatype' _x_i1 in
+        let o, _x_i2 = 
+          o#list 
+            (fun o (n, (qs, tyargs, e)) -> 
+              let o, n = o#name n in
+              let o, qs = 
+                o#list 
+                  (fun o q -> o#quantifier q) 
+                  qs
+              in
+              let o, tyargs = 
+                o#list 
+                  (fun o tyarg -> o#tyarg tyarg) 
+                  tyargs
+              in
+              let o, e = o#phrase e in
+              o, (n, (qs, tyargs, e))
+            ) 
+            _x_i2
+        in  
+        o, Instance (_x, _x_i1, _x_i2)
       | AlienBlock alien ->
          let o, lang = o#foreign_language (Alien.language alien) in
          let o, declarations =
@@ -2737,7 +2796,7 @@ class fold_map =
                 class_methods})*)
 
 
-    method instance_definition : instance_definition -> 'self * instance_definition
+    (*method instance_definition : instance_definition -> 'self * instance_definition
     = fun { instance_binder;
         instance_type;
         instance_methods
@@ -2753,7 +2812,7 @@ class fold_map =
         in
         (o, { instance_binder;
         instance_type;
-        instance_methods})
+        instance_methods})*)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

@@ -141,7 +141,7 @@ module type SugarConstructorsSig = sig
      -> binding*)
     
   val instance_binding
-      : ?ppos:t -> Binder.with_pos -> datatype' -> (Name.t * phrase) list
+      : ?ppos:t -> Name.t -> datatype' -> (Name.t * (SugarQuantifier.t list * tyarg list * phrase)) list
      -> binding
 
   (* Database queries *)
