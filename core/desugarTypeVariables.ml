@@ -770,13 +770,12 @@ object (o : 'self)
           in
           if pks <> [] then
             match ListUtils.find_fstdiff pks with
+            (*TODO: make primary kinds non-optional in resolved sugarkind*)
             | Some k -> 
                   (match k with
                     | Some _k -> 
-                      Debug.print ("Must be of all same kind. Kinds present: ");
-                      (*TODO: make primary kinds non-optional in resolved sugarkind*)
                       print_pks pks;
-                      failwith "fix error code"
+                      failwith ("Must be of all same kind. Kinds present: ");
                     | _ -> failwith "bad")
             | None -> 
               try (List.hd pks), (List.hd sks)

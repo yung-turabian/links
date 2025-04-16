@@ -75,10 +75,6 @@ and alien_def =
     language: ForeignLanguage.t;
     object_name: string 
   }
-and class_fun_def =
-  {
-    cfun_binder: binder;
-  }
 and temporal_update =
   | ValidTimeUpdate of valid_time_update
   | TransactionTimeUpdate
@@ -105,7 +101,8 @@ and binding =
   | Rec        of fun_def list
   | Alien      of alien_def
   | Module     of string * binding list option
-  | CFun       of class_fun_def
+  | CFun       of binder
+  | CInst      of binder * (language * tyvar list * tail_computation)
 and special =
   | Wrong      of Types.t
   | Database   of value

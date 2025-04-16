@@ -394,10 +394,12 @@ class transform (env : Types.typing_environment) =
             check_type_application
               (InfixAppl ((tyargs, op), e1, e2), t)
               (fun () ->
-                 let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
-                 let (o, e1, _) = o#phrase e1 in
-                 let (o, e2, _) = o#phrase e2 in
-                   (o, InfixAppl ((tyargs, op), e1, e2), t))
+                let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
+
+                let (o, e1, _) = o#phrase e1 in
+                let (o, e2, _) = o#phrase e2 in
+
+                (o, InfixAppl ((tyargs, op), e1, e2), t))
       | Regex r ->
           let (o, r) = o#regex r in
             (o, Regex r, Instantiate.alias "Regex" [] tycon_env)
@@ -969,15 +971,6 @@ class transform (env : Types.typing_environment) =
 
 
         (o, ClassDecl (name, qs))
-
-        (*| Val (p, (tyvars, e), location, t) ->
-          let outer_tyvars = o#backup_quantifiers in
-          let (o, tyvars) = o#quantifiers tyvars in
-          let (o, e, _) = o#phrase e in
-          let o = o#restore_quantifiers outer_tyvars in
-          let (o, p) = o#pattern p in
-          let (o, t) = optionu o (fun o -> o#datatype') t in
-          (o, Val (p, (tyvars, e), location, t))*)
 
       | Instance (class_name, dt, instances) ->
 

@@ -1171,7 +1171,8 @@ end
 let () =
   ConstraintRegistry.register "Base" (module Base);
   ConstraintRegistry.register "Session" (module Session);
-  ConstraintRegistry.register "Mono" (module Mono)
+  ConstraintRegistry.register "Mono" (module Mono);
+  ConstraintRegistry.register "Num" (module Num)
 
 let get_restriction_constraint = ConstraintRegistry.get_restriction_constraint
 
@@ -1947,6 +1948,12 @@ let extract_tuple = function
          | Absent | Meta _ -> assert false
          | _ -> raise tag_expectation_mismatch) field_env
   | _ -> raise tag_expectation_mismatch
+
+
+let extract_type_args = function
+| Function (args, _effs, _retty) ->
+    args
+| _ -> raise tag_expectation_mismatch
 
 exception TypeDestructionError of string
 

@@ -409,6 +409,8 @@ val unwrap_map_type : typ -> typ * typ
 
 val extract_tuple : row -> datatype list
 
+val extract_type_args : datatype -> datatype
+
 (** type constructors *)
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype

@@ -19,6 +19,23 @@ let dynamic_static_routes
 let allow_static_routes = ref true
 
 
+module SubkindTable = struct
+  (* This would track all implementations of subkind class functions *)
+  let implementations = Hashtbl.create 10
+  
+  let add_impl name arg_type impl_var =
+    Hashtbl.add implementations (name, arg_type) impl_var
+  
+  let find_impl name arg_type =
+    try 
+      Hashtbl.find implementations (name, arg_type)
+    with NotFound exn ->
+      (* Try to find the most specific matching implementation *)
+      (* You'll need to implement this logic based on your type system *)
+      raise (NotFound exn)
+end
+
+
 module type EVALUATOR = sig
   type v = Value.t
   type result = Proc.thread_result Lwt.t
@@ -256,6 +273,18 @@ struct
         List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env
       in
       computation_yielding env cont body
+    | `SubkindClassFunction (name), args ->
+
+      let arg_type = Types.make_tuple_type (List.map Value.typ args) in
+      let impl_var = 
+        try SubkindTable.find_impl name arg_type
+        with NotFound _ ->
+          (** TODO: this should be caught earlier. *)
+          eval_error "No implementation found for subkind class function %s with these argument types" name
+      in
+      
+      value env (Variable impl_var) >>= fun impl ->
+      apply cont env (impl, args)
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
       apply_cont cont env (`String (string_of_int key))
@@ -561,13 +590,27 @@ struct
             let var = Var.var_of_binder alien_binder in
             let scope = Var.scope_of_binder alien_binder in
             computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
-        | CFun { cfun_binder; _ } ->
-            let var = Var.var_of_binder cfun_binder in
-            let name = Var.name_of_binder cfun_binder in
-            let scope = Var.scope_of_binder cfun_binder in
-            let class_fn_value = `SukindClassFunction name in
-            computation (Value.Env.bind var (class_fn_value, scope) env) cont (bs, tailcomp)
-         | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
+        | CFun b ->
+            let var = Var.var_of_binder b in
+            let name = Var.name_of_binder b in
+            let scope = Var.scope_of_binder b in
+
+            (*List.iter (fun (arg_types, impl_var) ->
+              SubkindTable.add_impl name arg_types impl_var
+            ) cfun_impls;*)
+            computation (Value.Env.bind var (`SubkindClassFunction name, scope) env) cont (bs, tailcomp)
+        | CInst (b, (op, _, tc)) ->
+          let var = Var.var_of_binder b in
+          let typ = Var.type_of_binder b in
+          let argtype = Types.extract_type_args typ in
+          let locals = Value.Env.localise env var in
+          let cont' =
+            K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
+               frame &> cont)
+          in
+          SubkindTable.add_impl op argtype var;
+          tail_computation env cont' tc
+        | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   ->
         value env v >>= fun v ->

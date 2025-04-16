@@ -1,50 +1,3 @@
-infixl 6 +;
-infixl 7 *;
-
-typename Nat = [|Zero|Succ:Nat|];
-
-#class Base2;
-
-#class Record : (a::Eff) {
-#		sig + : (a, a) -> a;
-#}
-
-# In this case the operator + takes on the kind Numeric.
-class Num : (a::Base) {
-		sig + : (a, a) -> a;
-		sig * : (a, a) -> a;
-		sig `negate` : (a) -> a;
-}
-
-infix 4 ==;
-infix 4 <>;
-
-#class Eq : (a) {
-#		sig == : (a, a) -> a;
-#		sig <> : (a, a) -> a;
-#}
-
-instance Num : Int {
-		+ : addInt;
-		* : mulInt;
-		`negate` : negInt;
-}
-
-#instance Num : Nat {
-#		+ : addNat;
-#		* : mulNat;
-#		`negate` : negNat;
-#}
-
-#instance Eq : Int {
-#		== : eqInt;
-#}
-
-
-sig dummy : (a::Num) -> a
-fun dummy (x) {
-		x
-}
 
 
 sig square : (a::Num) -> a
@@ -52,18 +5,13 @@ fun square(x) {
 		x * x
 }
 
-class Show : (a::Type) {
-		sig `show` : (a) ~> String;
+sig squares : (a::Num, a, a) -> (a, a, a)
+fun squares (x, y, z) {
+		(square(x), square(y), square(z))
 }
 
-instance Show : Bool {
-		# Not supported yet, check transformSugar
-		#`show` : fun (x) { if (x == true) "True" else "False" };
-		`show` : boolToString;
-}
+`show` false
 
-
-2 + 2
 
 # Sees that + is already defined with a kind signature, now has
 # to update the signature to refelect a wider quantifier.
@@ -82,9 +30,3 @@ instance Show : Bool {
 
 # Updates the constraint associated with the restriction "Numeric" to 
 # accept of type Int.
-
-
-#instance Num : Float {
-#		negate : negFloat;
-#}
-

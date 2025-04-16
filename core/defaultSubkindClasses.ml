@@ -65,5 +65,6 @@ let subkind_env : Types.subkind_environment =
       "Base"     , `Decl (pk_type, (lin_unl, "Base"));
       "Session"  , `Decl (pk_type, (lin_any, "Session"));
       "Eff"      , `Decl (pk_row , (default_effect_lin, "Effect"));
+      (*"Eq"       , `Class ((pk_type, (lin_unl, "Eq")), [], Utility.StringMap.empty);*)
       (*"Num"    , `Class ((pk_type , (lin_unl, "Effect")), [], []);*)
     ]

@@ -267,6 +267,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (* Comparisons *)
+
   "==",
   (p2 (fun v1 v2 -> Value.box_bool (equal v1 v2)),
    datatype "(a,a) -> Bool",

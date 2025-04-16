@@ -73,37 +73,6 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
 let lookup_effects (_, _, eff) = eff
 let with_effects (x, y, _) eff = (x, y, eff)
 
-(* Hashtable to track polymorphic class functions *)
-module PolyClassFunHash = Hashtbl.Make(
-  struct
-  type t = string * Types.datatype  (* class name * type args *)
-  
-  let equal (n1, targs1) (n2, targs2) = 
-    n1 = n2 && 
-    List.for_all2 (fun ta1 ta2 -> 
-      match ta1, ta2 with
-      | (pk1, t1), (pk2, t2) ->
-        pk1 = pk2 && 
-        match (pk1, Types.concrete_type t1, Types.concrete_type t2) with
-        | (PrimaryKind.Type, t1, t2) -> t1 = t2
-        | (PrimaryKind.Row, Types.Row r1, Types.Row r2) -> r1 = r2
-        | (PrimaryKind.Presence, Types.Present t1, Types.Present t2) -> t1 = t2
-        | (PrimaryKind.Presence, Types.Absent, Types.Absent) -> true
-        | _ -> false
-    ) targs1 targs2
-  
-  let hash (name, targs) = 
-    let hash_type_arg (pk, t) =
-      match pk with
-      | PrimaryKind.Type -> Hashtbl.hash (0, Types.concrete_type t)
-      | PrimaryKind.Row -> Hashtbl.hash (1, Types.concrete_type t)
-      | PrimaryKind.Presence -> Hashtbl.hash (2, Types.concrete_type t)
-    in
-    Hashtbl.hash (name, List.map hash_type_arg targs)
-end)
-
-let polymorphic_class_funs : Sugartypes.phrase PolyClassFunHash.t = PolyClassFunHash.create 17
-
 (* Hmm... shouldn't we need to use something like this? *)
 
 (* let with_mailbox_type t (nenv, tenv) = *)
@@ -158,6 +127,9 @@ sig
   val temporal_join : Temporality.t * tail_computation sem -> tail_computation sem
 
   val letvar : (var_info * tail_computation sem * tyvar list *
+               (var -> tail_computation sem)) -> tail_computation sem
+
+  val letinst : (var_info * tail_computation sem * language * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * string * (Name.t * (value sem) list) list * (value sem) list -> value sem
@@ -240,7 +212,7 @@ sig
 
   val alien : var_info * string * ForeignLanguage.t * (var -> tail_computation sem) -> tail_computation sem
 
-  val letcfun : var_info * (var -> tail_computation sem) -> tail_computation sem
+  val letcfun : var_info * Quantifier.t list ->  (var -> tail_computation sem) -> tail_computation sem
 
   val select : Name.t * value sem -> tail_computation sem
 
@@ -322,6 +294,8 @@ struct
 
     val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
+    val inst_binding : ?tyvars:tyvar list -> var_info * tail_computation -> language -> var M.sem
+
     val fun_binding :
       Var.var_info * (tyvar list * binder list * computation) * location * bool ->
       Var.var M.sem
@@ -332,7 +306,7 @@ struct
 
     val alien_binding : var_info * string * ForeignLanguage.t -> var M.sem
 
-    val cfun_binding : var_info -> var M.sem
+    val cfun_binding : (Var.var_info * tyvar list) -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -358,6 +332,14 @@ struct
     let comp_binding ?(tyvars=[]) (x_info , e) =
       let xb, x = Var.fresh_var x_info in
         lift_binding (letm ~tyvars (xb, e)) x
+
+    let inst_binding ?(tyvars=[]) (x_info, e) op =
+      let xb, x = Var.fresh_var x_info in
+      lift_binding (CInst (xb, (op, tyvars, e)) ) x
+
+    let cfun_binding (x_info, _tyvars) =
+      let xb, x = Var.fresh_var x_info in
+      lift_binding (CFun xb) x
 
     let fun_binding (f_info, (fn_tyvars, xsb, fn_body), fn_location, fn_unsafe) =
       let fb, f = Var.fresh_var f_info in
@@ -389,12 +371,6 @@ struct
     let alien_binding (x_info, object_name, language) =
       let xb, x = Var.fresh_var x_info in
       lift_binding (Alien { alien_binder = xb; object_name; language }) x
-
-
-    let cfun_binding (x_info) =
-      let xb, x = Var.fresh_var x_info in
-      lift_binding (CFun { cfun_binder = xb }) x
-
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -612,9 +588,6 @@ struct
   let alien (x_info, object_name, language, rest) =
     M.bind (alien_binding (x_info, object_name, language)) rest
 
-  let letcfun (x_info, rest) =
-    M.bind (cfun_binding (x_info)) rest
-
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
       bind e (fun v -> lift (Special (Select (l, v)), t))
@@ -733,6 +706,12 @@ struct
          M.bind (comp_binding ~tyvars (x_info, e))
            (fun x -> body x))
 
+  let letinst (x_info, s, op, tyvars, body) =
+    bind s
+    (fun e ->
+       M.bind (inst_binding ~tyvars (x_info, e) op)
+         (fun x -> body x))
+
   let temporal_join (mode, comp) =
     let bs, e = reify comp in
     lift (Special (TemporalJoin (mode, (bs, e), sem_type comp)), sem_type comp)
@@ -756,6 +735,12 @@ struct
     let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown, false)) rest
+
+
+  let letcfun (x_info, tyvars) rest =
+    let ft = Var.info_type x_info in
+
+    M.bind (cfun_binding (x_info, tyvars)) rest
 
   let letfun (f_info, (tyvars, (body_env, ps, body)), location, unsafe) rest =
     let ft = Var.info_type f_info in
@@ -900,33 +885,6 @@ struct
                   Instantiate.ArityMismatch (expected, provided) ->
                     raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
-
-      let instantiate_class_fun name tyargs =
-        try 
-          (* First try to find a polymorphic version *)
-          (*let type_args = List.map (fun t -> (PrimaryKind.Type, t)) tyargs in*)
-          let string_of_type_args type_args =
-            let strs = ( List.map (fun ty -> Types.string_of_type_arg ty) type_args) in
-            String.concat ", " strs
-          in
-
-          Debug.print (string_of_type_args tyargs);
-
-          let x = PolyClassFunHash.find polymorphic_class_funs (name, tyargs) in
-          let v = evalv env x in
-          let xt = I.sem_type v in
-          match tyargs with
-          | [] -> failwith "dd"
-          | _ ->
-            try
-              I.tappl (v, tyargs)
-            with
-              Instantiate.ArityMismatch (expected, provided) ->
-                raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) 
-        
-        with Not_found ->
-          failwith "Couldn't find class function." in
-
       let rec is_pure_primitive e =
         let open Sugartypes in
         match WithPos.node e with
@@ -982,7 +940,7 @@ struct
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
-            I.apply (instantiate_class_fun n tyargs, [ev e1; ev e2])
+            I.apply (instantiate n tyargs, [ev e1; ev e2])
           | InfixAppl ((tyargs, BinaryOp.Cons), e1, e2) ->
               cofv (I.apply_pure (instantiate "Cons" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.FloatMinus), e1, e2) ->
@@ -1003,7 +961,7 @@ struct
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
-              I.apply (instantiate_class_fun n tyargs, [ev e])
+              I.apply (instantiate n tyargs, [ev e])
           | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
@@ -1364,80 +1322,69 @@ struct
                       I.letfun
                         (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
-
                 | ClassFun fun' ->
                   let binder = fst (Class.fun' fun') in
                   assert (Binder.has_type binder);
                   let class_name = (Class.name fun') in
-                  let qs = (Class.quantifiers fun') in
-                  let tyvars = List.map (fun q -> SugarQuantifier.get_resolved_exn q) qs in
-                  let type_args = List.map (fun q -> Types.type_arg_of_quantifier q) tyvars in
+                  let qs = List.map (fun q -> SugarQuantifier.get_resolved_exn q) (Class.quantifiers fun') in
+                  let _type_args = List.map (fun q -> Types.type_arg_of_quantifier q) qs in
                   let f = Binder.to_name binder in
                   let ft = Binder.to_type binder in
-                  let f_var = snd (Var.fresh_var (Var.make_info ft f scope)) in
+                  let _f_var = snd (Var.fresh_var (Var.make_info ft f scope)) in
 
-                  Debug.print ("Registering new `" ^ class_name  ^ "` function:\n\t" ^ f ^  " of " ^ (Types.string_of_datatype ft));
+                  Debug.if_set (CommonTypes.show_subkindclasses)
+                  (fun () -> 
+                    ("Registering new `" ^ class_name  ^ "` function:\n\t" ^ f ^  " of " ^ (Types.string_of_datatype ft)));
                   
-                  (* Track polymorphic class functions *)
-                  (*if not (List.is_empty tyvars) then
-                    PolyClassFunHash.add polymorphic_class_funs (f, type_args) (f_var, Var.make_info ft f scope);*)
-                  
-                  I.letcfun (Var.make_info ft f scope,
-                    fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
+                  I.letcfun 
+                    (Var.make_info ft f scope, qs)
+                    (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
 
                 | Instance (class_name, dt, instances) ->
-                  let (_, datatype) = dt in       
+                  let (_, datatype) = dt in  
+                  
+                  let datatype = 
+                    match datatype with
+                    | Some t ->
+                      Debug.if_set (CommonTypes.show_subkindclasses)
+                        (fun () -> 
+                          ("Registering new instance of class `" ^ class_name ^ "` of type: " ^ Types.string_of_datatype t));
+                        t
+                    | None -> 
+                        failwith "No type attached?"
+                  in
+
 
                   let string_of_type_args type_args =
                     let strs = ( List.map (fun ty -> Types.string_of_type_arg ty) type_args) in
                     String.concat ", " strs
                   in
 
-                  (*List.iter (fun (op, (_, _)) -> 
-                    Debug.print op;
-                    ) instances;*)
+                  let rec process_methods remaining_methods scope env bs e =
+                    match remaining_methods with
+                    | [] -> eval_bindings scope env bs e  (* No more methods, continue *)
+                    | (op, (qs, tyargs, body))::rest ->
 
-                  let () =
-
-                    match datatype with
-                    | Some t ->
-                        Debug.print ("Registering new instance of class `" ^ class_name ^ "` of type: " ^ Types.string_of_datatype t);
-                        List.iter (fun (op, (_qs, tyargs, e)) -> 
-                          let v = ev e in
-                          let vt = I.sem_type v in
-                          Debug.print (Types.string_of_datatype vt);
-                          Debug.print ("\t" ^ op ^ " : " ^ (string_of_type_args tyargs));
-                          PolyClassFunHash.add polymorphic_class_funs (op, tyargs) e;
-                          ) instances;
-                    | None -> 
-                        failwith "No type attached?"
+                        let x = ev body in
+                        let xt = I.sem_type x in
+                        let affix_op = op ^ Types.string_of_datatype datatype in
+                        let x_info = Var.make_info xt affix_op scope in
+                        let qs = List.map SugarQuantifier.get_resolved_exn qs in
+                        Debug.if_set (CommonTypes.show_subkindclasses)
+                          (fun () -> 
+                            ("\t" ^ op ^ " : " ^ (string_of_type_args tyargs) ^ " : " ^ (Types.string_of_datatype xt)));
+                        
+                        I.letinst
+                          (x_info,
+                           ec body,
+                           op,
+                           qs,
+                           fun v ->
+                             
+                             process_methods rest scope (extend [affix_op] [(v, xt)] env) bs e)
                   in
+                  process_methods instances scope env bs e
 
-                    
-
-                  eval_bindings scope env bs e
-                (*| ClassFun fun' ->
-                  let binder = fst (Class.fun' fun') in
-                  assert (Binder.has_type binder);
-                  let class_name = (Class.name fun') in
-                  let qs = (Class.quantifiers fun') in
-                  let tyvars = List.map (fun q -> SugarQuantifier.get_resolved_exn q) qs in
-                  let f  = Binder.to_name binder in
-                  let ft = Binder.to_type binder in
-
-                  begin
-                    PolyClassFunHash.hash polymorphic_class_funs (f, ft) (f_var, Var.make_info ft f scope)
-                  end;
-
-                  (* Track polymorphic class functions *)
-                  (*if not (List.is_empty tyvars) then begin
-                    (*let type_args = List.map (fun q -> Types.type_arg_of_quantifier q) tyvars in
-                    let f_var = snd (Var.fresh_var (Var.make_info ft f scope)) in*)
-                    PolyClassFunHash.add polymorphic_class_funs (f, type_args) (f_var, Var.make_info ft f scope)
-                  end;*)
-                  
-                  I.letcfun (Var.make_info ft f scope,
-                    fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)*)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
@@ -1556,11 +1503,17 @@ struct
                  let f = Var.var_of_binder alien_binder in
                  let f_name = Var.name_of_binder alien_binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
-              | CFun { cfun_binder; _ }
-                   when Var.Scope.is_global (Var.scope_of_binder cfun_binder) ->
-                 let f = Var.var_of_binder cfun_binder in
-                 let f_name = Var.name_of_binder cfun_binder in
+              | CFun bndr
+                   when Var.Scope.is_global (Var.scope_of_binder bndr) ->
+                 let f = Var.var_of_binder bndr in
+                 let f_name = Var.name_of_binder bndr in
+                 (*let typ = Var.type_of_binder cfun_binder in
+                 failwith (Types.string_of_datatype typ);*)
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
+              | CInst (b', _) when Var.(Scope.is_global (scope_of_binder b')) ->
+                let x = Var.var_of_binder b' in
+                let x_name = Var.name_of_binder b' in
+                partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
               | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in

@@ -55,6 +55,7 @@ let variables_in_computation comp =
     (* traverse_computation c *)
   and traverse_binding = function
     | Let (_, (_, tc)) -> traverse_tail_computation tc
+    | CInst (_, (_, _, tc)) -> traverse_tail_computation tc
     | Fun fd ->
         Debug.print "traversing fundef";
         traverse_fundef fd

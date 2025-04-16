@@ -1279,7 +1279,6 @@ struct
             let (o, tc) = handle_ir_type_error lazy_check (o, tc) (SBind orig) in
             let o, x = o#binder x in
             o, Let (x, (tyvars, tc))
-
         | Fun fundef as binding ->
            (* It is important that the type annotations of the parameters are
               expressed in terms of the type variables from tyvars (also for rec
@@ -1385,6 +1384,30 @@ struct
            let o, x = o#binder alien_binder in
            o, Alien { alien_binder = x; object_name; language }
 
+        | CFun bndr ->
+          let o, x = o#binder bndr in
+          o, CFun x
+        | (CInst (x, (op, tyvars, tc))) as orig ->
+          let lazy_check =
+          lazy
+            begin
+              let previous_tyenv = o#get_type_var_env in
+              let o = List.fold_left
+                        (fun o quant ->
+                          let var  = Quantifier.to_var  quant in
+                          let kind = Quantifier.to_kind quant in
+                          o#add_typevar_to_context var kind) o tyvars in
+              let o, tc, act = o#tail_computation tc in
+              let o = o#set_type_var_env previous_tyenv in
+              let exp = Var.type_of_binder x in
+              let act_foralled = Types.for_all (tyvars, act) in
+              o#check_eq_types exp act_foralled (SBind orig);
+              o, tc
+            end in
+          let (o, tc) = handle_ir_type_error lazy_check (o, tc) (SBind orig) in
+          let o, x = o#binder x in
+          o, CInst (x, (op, tyvars, tc))     
+
         | Module (name, defs) ->
             let o, defs =
               match defs with
@@ -1430,6 +1453,8 @@ struct
                 o
                 fundefs
       | Alien { alien_binder; _ } -> o#remove_binder alien_binder
+      | CFun bndr -> o#remove_binder bndr
+      | CInst (x, _) -> o#remove_binder x
       | Module _ -> o
 
     method remove_bindings : binding list -> 'self_type =

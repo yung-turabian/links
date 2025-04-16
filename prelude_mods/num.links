@@ -1,0 +1,78 @@
+typename Nat = [|Zero|Succ:Nat|];
+
+# Mutually recursive functions
+mutual {
+		sig isOdd : (Nat) ~> Bool
+		fun isOdd(n) {
+			switch(n) {
+				case Zero -> false
+				case Succ(n) -> isEven(n)
+			}
+		}
+
+		sig isEven : (Nat) ~> Bool
+		fun isEven(n) {
+			switch(n) {
+				case Zero -> true
+				case Succ(n) -> isOdd(n)
+			}
+		}
+}
+
+sig isZero : (Nat) ~> Bool
+fun isZero(n) {
+		switch (n) {
+				case Zero -> true
+				case Succ(_) -> false
+		}
+}
+
+sig pred : (Nat) ~> Nat
+fun pred(n) {
+		switch (n) {
+				case Zero -> error("pred Zero is undefined.")
+				case Succ(m) -> m
+		}
+}
+
+sig addNat : (Nat, Nat) ~> Nat
+fun addNat(n1, n2) {
+		switch (n1) {
+						case Zero -> n2
+						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
+		}
+}
+
+infixl 6 +;
+infixl 7 *;
+
+class Num : (a) {
+		sig + : (a, a) -> a;
+		sig * : (a, a) -> a;
+		sig `negate` : (a) -> a;
+}
+
+
+instance Num : Int {
+		+ : addInt;
+		* : mulInt;
+		`negate` : negInt;
+}
+
+instance Num : Float {
+		+ : addFloat;
+		* : mulFloat;
+		`negate` : negFloat;
+}
+
+class UnsafeNum : (a) {
+		sig + : (a, a) ~> a;
+}
+
+instance UnsafeNum : Nat {
+		+ : addNat;
+#		* : mulNat;
+#		`negate` : negNat;
+}
+
+Zero + Zero

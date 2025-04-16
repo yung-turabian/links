@@ -5325,6 +5325,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
 
       | Instance (class_name, dt, instances) ->
+          (** TODO: Check body type matches Instance type *)
 
           let _pk, _sk, _qs, _funs = match lookup_subkind context class_name with
             | Some ( (pk, sk), qs, methods ) -> 
@@ -5346,8 +5347,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             String.concat ", " strs
           in
 
-
-          (*TODO: datatype here will instantiate anonumous variables with type. *)
           let instances =
             List.fold_right
               (fun (pat, (_qs, _tyargs, body)) bindings ->
@@ -5387,7 +5386,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                   if Utils.is_generalisable body then
                     (*let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
                     let pat = update_pattern_vars penv (erase_pat pat) in*)
-                    let ((tyvars, args), _bt) = Generalise.generalise context.var_env bt in
+                    let ((tyvars, _args), _bt) = Generalise.generalise context.var_env bt in
                     tyvars(*, pat, penv*)
                   else
                     failwith "bad choice"

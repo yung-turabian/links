@@ -740,7 +740,6 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
-| `SukindClassFunction of string
 | `ClientDomRef of int
 | `ClientFunction of string
 | `ClientClosure of int
@@ -752,6 +751,7 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 | `Alien
+| `SubkindClassFunction of string
 ]
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
@@ -762,6 +762,15 @@ type delegated_chan = (chan * (t list))
 
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
+
+
+let rec typ : t -> Types.datatype = function
+  | `Bool _ -> Types.bool_type
+  | `Int _ -> Types.int_type
+  | `Float _ -> Types.float_type
+  | `Char _ -> Types.char_type
+  | `String _ -> Types.string_type
+  | _ -> failwith "value.ml; Not implemented this type in the checker."
 
 (** {1 Pretty-printing values} *)
 
@@ -792,7 +801,6 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `ClientClosure _
   | `ClientFunction _ -> fprintf ppf "fun"
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
-  | `SukindClassFunction name -> fprintf ppf "%s" name
   | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
   | `Variant (label, (`Record _ as value)) -> fprintf ppf "@{<constructor>%s@}@[%a@]" label p_value value
@@ -825,6 +833,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
   | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
   | `Alien -> fprintf ppf "alien"
+  | `SubkindClassFunction name -> fprintf ppf "%s" name
   | `DateTime (Timestamp.Timestamp ts) ->
       (* Default to showing local time representation *)
       p_local_datetime ppf ts

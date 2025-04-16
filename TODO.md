@@ -1,13 +1,11 @@
 # TODO
 
-+ In SugartoIR, the hashtable should be able to be queried by string and then fetch the phrase when supplied a type.
++ Update CFun to take a list of type and implementation binder and it should be all set to go.
+
++ Constraint doesn't seem to halt unsupported type operations
+
++ If not polymorphic functions can be resolved at compile time but if not then will be resolved at runtime in evalir.
 
 + Better error handling.
 
-+ Handle desugarEffects properly once the dictionary is done. 
-
-+ Use a stringmap for the operator dict
-
 + Update repl.ml and types.ml so you can print subkind environment.
-
-+ Remove subkind_env from desugar datatypes.

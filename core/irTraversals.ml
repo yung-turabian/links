@@ -508,9 +508,13 @@ struct
         | Alien ({ alien_binder; _ } as payload) ->
             let o, alien_binder = o#binder alien_binder in
             o, Alien { payload with alien_binder}
-        | CFun ({ cfun_binder; _ } as payload) ->
-          let o, cfun_binder = o#binder cfun_binder in
-          o, CFun { payload with cfun_binder}
+        | CFun b ->
+          let o, bndr = o#binder b in
+          o, CFun (bndr)
+        | CInst (x, (op, tyvars, tc)) ->
+          let o, x = o#binder x in
+          let o, tc, _ = o#tail_computation tc in
+            o, CInst (x, (op, tyvars, tc))        
         | Module (name, defs) ->
             let o, defs =
               match defs with
