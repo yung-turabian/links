@@ -22,30 +22,7 @@
   a new function is added to the environment:
 
   sig == : (Int, Int) -> Bool
-  op f == g {
-    eqInt(f, g)
-  }
-
-
-  To derive from another class:
-
-  class Ord : a::Eq {
-    ...
-  }
-
-  Or to specify a specific restriction, if not will create one:
-
-  class Eq : a::Type(Any, Base) {
-  ...
-  }
-
-  TODO: the previous example is a potential flaw for bloat, perhaps find a way to resolve to best fit subkind?
-
-  Changing the previous order:
-
-  - Now Eq<:Type and Base<:Eq
-
-
+  eqInt(m, n)
 *)
 
 open CommonTypes
@@ -59,12 +36,12 @@ let subkind_env : Types.subkind_environment =
       SubkindEnv.bind name t env)
       SubkindEnv.empty
     [ 
-      "Mono"     , `Decl (pk_type, (lin_any, "Mono"));
-      "Any"      , `Decl (pk_type, (lin_any, "Any"));
-      "Lin"      , `Decl (pk_type, (lin_unl, "Any")); (* for linear effect vars *)
-      "Base"     , `Decl (pk_type, (lin_unl, "Base"));
-      "Session"  , `Decl (pk_type, (lin_any, "Session"));
-      "Eff"      , `Decl (pk_row , (default_effect_lin, "Effect"));
+      "Mono"     , `Decl (None, (lin_any, "Mono"));
+      "Any"      , `Decl (None, (lin_any, "Any"));
+      "Lin"      , `Decl (None, (lin_unl, "Any")); (* for linear effect vars *)
+      "Base"     , `Decl (None, (lin_unl, "Base"));
+      "Session"  , `Decl (None, (lin_any, "Session"));
+      "Eff"      , `Decl (Some pk_row , (default_effect_lin, "Eff"));
       (*"Eq"       , `Class ((pk_type, (lin_unl, "Eq")), [], Utility.StringMap.empty);*)
       (*"Num"    , `Class ((pk_type , (lin_unl, "Effect")), [], []);*)
     ]

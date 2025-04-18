@@ -242,8 +242,8 @@ type tycon_spec = [
 ] [@@deriving show]
 
 type subkind_spec = [
-  | `Decl of Kind.t 
-  | `Class of (Kind.t * Quantifier.t list * datatype Utility.StringMap.t)
+  | `Decl of PrimaryKind.t option * Subkind.t
+  | `Class of ((PrimaryKind.t option * Subkind.t) * Quantifier.t list * datatype Utility.StringMap.t)
 ] [@@deriving show]
 
 type environment         = datatype Env.String.t

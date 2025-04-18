@@ -5314,7 +5314,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
             (* HACK: naively setting quantifiers for whole class as in this build
                this isn't as much as a concern. *)
-            bind_subkind env (class_name, `Class ((pk, sk), qs, (StringMap.add (Binder.to_name binder) datatype old_map) ))
+            bind_subkind env (class_name, `Class ((Some pk, sk), qs, (StringMap.add (Binder.to_name binder) datatype old_map) ))
             
           ) env ((Class.name f), (Class.quantifiers f)) 
         in

@@ -72,7 +72,6 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                      inst t
               end
         | Function (f, m, t) -> 
-          Debug.print (Types.string_of_datatype f); 
           Function (inst f, instr m, inst t)
         | Lolli (f, m, t) -> Lolli (inst f, instr m, inst t)
         | Record row -> Record (instr row)

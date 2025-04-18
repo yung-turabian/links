@@ -1,0 +1,4 @@
+(install
+  (section lib)
+  (files (num.links as prelude_mods/num.links))
+  (package links))

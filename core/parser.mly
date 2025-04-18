@@ -113,12 +113,11 @@ let full_kind_of pos prim lin rest =
 let linrow_kind_of pos prim lin =
   let pk = primary_kind_of_string pos prim in
   let l = if lincont_enabled then linearity_of_string pos lin else lin_unl in
-  let r = res_any in
-  SugarKind.mk_unresolved (Some pk) (Some l, Some r)
+  SugarKind.mk_unresolved (Some pk) (Some l, None)
 
-let full_subkind_of pos lin res =
-  let l = linearity_of_string   pos lin  in
-  SugarKind.mk_unresolved None (Some l, Some res)
+let full_subkind_of pos lin rest =
+  let l = linearity_of_string pos lin  in
+  SugarKind.mk_unresolved None (Some l, Some rest)
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
@@ -132,11 +131,13 @@ perhaps. *)
 let kind_of p =
   let open Kind in function
   (* primary kind abbreviation  *)
-  | "Type"     -> SugarKind.mk_resolved (Some pk_type) (Some default_subkind)
-  | "Row"      -> SugarKind.mk_resolved (Some pk_row) (Some default_subkind) (* either a value row or an effect row *)
-  | "Presence" -> SugarKind.mk_resolved (Some pk_presence) (Some (lin_any, res_any))
+  | "Type"     -> SugarKind.mk_resolved (Some pk_type) None
+  | "Row"      -> SugarKind.mk_resolved (Some pk_row) None (* either a value row or an effect row *)
+  | "Presence" -> SugarKind.mk_resolved (Some pk_presence) None
   (* subkind of type abbreviations *)
   | k          -> SugarKind.mk_unresolved None (None, (Some k))
+
+let subkind_of p = kind_of p
 
 let unresolved_kind = SugarKind.mk_unresolved None (None, None)
 
@@ -481,33 +482,6 @@ nofun_declaration:
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
-/* 
-  Working on. Should denote what Kind it dervies from and/or subkinds 
-
-  I imagine it would look something like this:
-
-  subkind Numeric = Type :: Base :: Numeric;
-  or short-hand
-  subkind Numeric = Base :: Numeric; (since it should be known that Base already derives from Type)
-  
-  WORK ON THIS
-
-  sig plusInt : (Int, Int) -> Int
-  fun plusInt(x, y) {
-    x + y
-  }
-  class Numeric <: Base : a {
-    sig + : (a,a) -> a;
-  }
-
-  instance Numeric Int {
-    (+) = plusInt
-    (*) = mulInt
-  }
-
-  TODO There needs to be a new heuristic that checks if a the type variable needs a certain operation provided
-       by subkind. This could absolve a future issue where the system doesnt know how to subkind to the proper one.
-*/
 class_operator:
 | OPERATOR                                                     { $1 }
 
@@ -614,15 +588,17 @@ typeargs_opt:
 
 kind:
 // Full kind
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
-                                                               { full_kind_of $loc $2 $4 $6 }
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN { full_kind_of $loc $2 $4 $6 }
 // Primary kind, linearity and restriction `Any`
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
-                                                               { linrow_kind_of $loc $2 $4  }
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN                   { linrow_kind_of $loc $2 $4  }
+// Primary kind
+| COLONCOLON CONSTRUCTOR                                             { kind_of $loc($2) $2 }
+
+subkind:
 // Linearity and restriction
 | COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-// Primary kind or subkind
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2 }
+// Subkind
+| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
 | VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
@@ -1244,7 +1220,7 @@ type_var:
 | PERCENT                                                      { Datatype.TypeVar (fresh_typevar `Flexible) }
 
 kinded_type_var:
-| type_var kind                                                { attach_subkind ($1, $2) }
+| type_var subkind                                             { attach_subkind ($1, $2) }
 
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
@@ -1359,7 +1335,7 @@ ebraced_fieldspec:
 | LBRACE kinded_epresence_var RBRACE                           { $2 }
 
 kinded_epresence_var:
-| nonrec_epresence_var kind                                    { attach_presence_subkind ($1, $2) }
+| nonrec_epresence_var subkind                                 { attach_presence_subkind ($1, $2) }
 
 nonrec_epresence_var:
 | VARIABLE                                                     { Datatype.Var (named_typevar ~is_eff:true $1 `Rigid   ) }
@@ -1378,10 +1354,10 @@ row_var:
 | LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_nonrec_row_var:
-| nonrec_row_var kind                                          { attach_row_subkind ($1, $2) }
+| nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_row_var:
-| row_var kind                                                 { attach_row_subkind ($1, $2) }
+| row_var subkind                                              { attach_row_subkind ($1, $2) }
 
 nonrec_eff_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar ~is_eff:true $1 `Rigid   ) }
@@ -1399,7 +1375,7 @@ vrow_var:
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_vrow_var:
-| vrow_var kind                                                { attach_row_subkind ($1, $2) }
+| vrow_var subkind                                             { attach_row_subkind ($1, $2) }
 
 
 /*

@@ -217,8 +217,8 @@ type tycon_spec = [
 ] [@@deriving show]
 
 type subkind_spec = [
-  | `Decl of Kind.t (** For simple subkind creation without related methods *)
-  | `Class of (Kind.t * Quantifier.t list * datatype StringMap.t) (** Subkind class creation, kind & key for methods-map *)
+  | `Decl of PrimaryKind.t option * Subkind.t (** For simple subkind creation without related methods *)
+  | `Class of ((PrimaryKind.t option * Subkind.t) * Quantifier.t list * datatype StringMap.t) (** Subkind class creation, kind & key for methods-map *)
 ] [@@deriving show]
 
 (* Generation of fresh type variables *)
@@ -2516,7 +2516,7 @@ struct
     | Function _ | Lolli _ -> true
     | Alias (_, (_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
        begin match ListUtils.last_opt qs with
-       | Some (PrimaryKind.Row, (_, "Effect")) -> true
+       | Some (PrimaryKind.Row, (_, "Eff")) -> true
        | _ -> false
        end
     | _ -> false
@@ -2583,7 +2583,7 @@ struct
        | (Linearity.Unl, "Base")    -> Restriction.to_string res_base
        | (Linearity.Any, "Num")    -> "Num"
        | (Linearity.Any, "Session") -> Restriction.to_string res_session
-       | (Linearity.Unl, "Effect")  -> Restriction.to_string res_effect
+       | (Linearity.Unl, "Eff")  -> Restriction.to_string res_effect
        | (l, r) -> full (l, r)
 
   let kind : (policy * names) -> Kind.t -> string =
@@ -2605,7 +2605,7 @@ struct
          subkind Policy.({policy with kinds = Full}, vars) sk
       | PrimaryKind.Row, (Linearity.Unl, "Any") ->
          PrimaryKind.to_string pk_row
-      | PrimaryKind.Row, (Linearity.Unl, "Effect") ->
+      | PrimaryKind.Row, (Linearity.Unl, "Eff") ->
          PrimaryKind.to_string pk_row
       | PrimaryKind.Presence, (Linearity.Unl, "Any") ->
          PrimaryKind.to_string pk_presence
@@ -3146,7 +3146,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
-      primary = PrimaryKind.Row && restriction = "Effect"
+      primary = PrimaryKind.Row && restriction = "Eff"
 
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
     let implicit_allowed_in : typ -> bool
@@ -3687,7 +3687,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        | (L.Any, "Any")     -> if is_eff && lincont_enabled then Empty else constant "Any"
        | (L.Unl, "Base")    -> constant @@ R.to_string res_base
        | (L.Any, "Session") -> constant @@ R.to_string res_session
-       | (L.Unl, "Effect")  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
+       | (L.Unl, "Eff")  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
        | _ -> full_name
 
 
@@ -3731,10 +3731,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                end
              | PrimaryKind.Row -> begin
                  match subknd with
-                 | L.Unl, "Any" | L.Unl, "Effect" ->
+                 | L.Unl, "Any" | L.Unl, "Eff" ->
                     if is_eff && lincont_enabled then StringBuffer.write buf (P.to_string pk_row ^ "(Lin)")
                     else StringBuffer.write buf (P.to_string pk_row)
-                 | L.Any, "Any" | L.Any, "Effect" ->
+                 | L.Any, "Any" | L.Any, "Eff" ->
                     (* NOTE: The first branch might not be entirely compatible with value rows. *)
                     if not lincont_enabled then StringBuffer.write buf (P.to_string pk_row)
                     else if is_eff then StringBuffer.write buf (P.to_string pk_row)
@@ -3749,9 +3749,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, "Any" ->
                     StringBuffer.write buf (P.to_string pk_presence)
-                 | L.Any, "Effect" ->
+                 | L.Any, "Eff" ->
                     StringBuffer.write buf (P.to_string pk_row)
-                 | L.Unl, "Effect" ->
+                 | L.Unl, "Eff" ->
                     (* explicit kinds for linear presence variables *)
                     StringBuffer.write buf (P.to_string pk_presence ^ "(Lin)")
                  | _ ->
@@ -3857,7 +3857,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
                   let ambients = List.map (function
-                                     | (PrimaryKind.Row, (_, "Effect")) -> Some Context.Effect
+                                     | (PrimaryKind.Row, (_, "Eff")) -> Some Context.Effect
                                      | _ -> None) arg_kinds in
                   Printer.concat_items_with_ambients ~sep:"," type_arg arg_types ambients ctx buf;
                   StringBuffer.write buf ")"))

@@ -76,7 +76,7 @@ module Restriction = struct
     Hashtbl.add graph "Base" ["Mono"; "Any"];
     Hashtbl.add graph "Session" ["Mono"; "Any"];
     (* Effect is a direct child of Any *)
-    Hashtbl.add graph "Effect" ["Any"]
+    Hashtbl.add graph "Eff" ["Any"]
 
 
   (* Check if a restriction exists *)
@@ -171,7 +171,7 @@ let res_any     = "Any"
 let res_base    = "Base"
 let res_mono    = "Mono"
 let res_session = "Session"
-let res_effect  = "Effect"
+let res_effect  = "Eff"
 
 module Subkind = struct
   type t = Linearity.t * Restriction.t
@@ -181,6 +181,10 @@ module Subkind = struct
     Printf.sprintf "(%s,%s)"
       (Linearity.to_string   lin)
       (Restriction.to_string res)
+
+  let to_string_opt = function
+  | Some (lin, res) -> to_string (lin, res)
+  | _ -> ""
 
   let restriction (_, res) = res
   let linearity (lin, _) = lin
@@ -234,6 +238,20 @@ module Kind = struct
     (pk, Subkind.as_session sk)
 
   let primary_kind (pk, _) = pk
+
+  let to_string (pk, sk) = 
+    let pk = 
+      match pk with
+      | None -> ""
+      | Some k -> PrimaryKind.to_string k
+    in
+    let sk = 
+      match sk with
+      | None -> ""
+      | Some k -> Printf.sprintf "%s%s" "::" (Subkind.to_string k)
+    in
+
+    Printf.sprintf "%s%s" pk sk
 end
 
 module Quantifier = struct

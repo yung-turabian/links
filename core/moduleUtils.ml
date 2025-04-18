@@ -28,6 +28,14 @@ let stdlib_path =
             |> convert Utility.(Sys.expand ->- some)
             |> sync)
 
+(* Prelude modules path *)
+(* No use_ because we are going to always want to use this. *)
+let prelude_mods_path =
+  Settings.(option ~default:(Some Linkspath.prelude_mods) "prelude_mods"
+            |> to_string from_string_option
+            |> convert Utility.(Sys.expand ->- some)
+            |> sync)
+
 let module_sep = "."
 
 type term_shadow_table = string list stringmap
@@ -55,9 +63,18 @@ let try_parse_file filename =
     else []
   in
 
+  let poss_prelude_mods =
+    match Settings.get prelude_mods_path with
+    | None ->
+      let chopped_path = check_n_chop @@ locate_file "prelude_mods" in
+      [Filename.concat chopped_path "prelude_mods"]
+    | Some prelude_mods_path ->
+        [check_n_chop prelude_mods_path]
+  in
+
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+    "" :: (List.map (check_n_chop) paths)
   in
 
   (* Loop through, trying to open the module with each path *)

@@ -9,6 +9,7 @@
    val examples : string      (* Absolute path to the Links examples directory. *)
    val stdlib : string        (* Absolute path to the Links standard library directory. *)
    val prelude : string       (* Absolute filename for `prelude.links`. *)
+   val prelude_mods : string  (* Absolute path to the Links prelude modules. *)
 
    The generated module is meant for inclusion in Links core.  *)
 
@@ -28,7 +29,7 @@ let check_opam =
 
 let _ =
 
-  let[@warning "-8"] [config; jslib; examples; stdlib; prelude]  =
+  let[@warning "-8"] [config; jslib; examples; stdlib; prelude; prelude_mods]  =
     if check_opam (* If Links is being built by OPAM *)
     then let lib = input_line (Unix.open_process_in "opam var lib") in
          let etc = input_line (Unix.open_process_in "opam var etc") in
@@ -41,12 +42,13 @@ let _ =
          let examples = Filename.concat share "examples" in
          let stdlib = Filename.concat lib "stdlib" in
          let prelude = Filename.concat lib "prelude.links" in
-         [config; jslib; examples; stdlib; prelude]
+         let prelude_mods = Filename.concat lib "prelude_mods" in
+         [config; jslib; examples; stdlib; prelude; prelude_mods]
     else if is_git_repository () (* If Links is being built from the git repository sources *)
     then let root = input_line (Unix.open_process_in "git rev-parse --show-toplevel") in
          let config = "None" in
          let paths =
-           List.map (Filename.concat root) ["lib/js"; "examples"; "lib/stdlib"; "prelude.links"]
+           List.map (Filename.concat root) ["lib/js"; "examples"; "lib/stdlib"; "prelude.links"; "lib/prelude_mods"]
          in
          config :: paths
     else (* If Links is being built from other sources, then we do a
@@ -64,5 +66,6 @@ let _ =
   Printf.fprintf oc "let jslib = \"%s\"\n" jslib;
   Printf.fprintf oc "let examples = \"%s\"\n" examples;
   Printf.fprintf oc "let stdlib = \"%s\"\n" stdlib;
+  Printf.fprintf oc "let prelude_mods = \"%s\"\n" prelude_mods;
   Printf.fprintf oc "let prelude = \"%s\"\n" prelude;
   close_out oc

@@ -21,7 +21,7 @@ let allow_static_routes = ref true
 
 module SubkindTable = struct
   (* This would track all implementations of subkind class functions *)
-  let implementations = Hashtbl.create 10
+  let implementations = Hashtbl.create 30
   
   let add_impl name arg_type impl_var =
     Hashtbl.add implementations (name, arg_type) impl_var
@@ -274,10 +274,9 @@ struct
       in
       computation_yielding env cont body
     | `SubkindClassFunction (name), args ->
-
-      let arg_type = Types.make_tuple_type (List.map Value.typ args) in
+      let argtypes = Types.make_tuple_type (List.map Value.typ args) in
       let impl_var = 
-        try SubkindTable.find_impl name arg_type
+        try SubkindTable.find_impl name argtypes
         with NotFound _ ->
           (** TODO: this should be caught earlier. *)
           eval_error "No implementation found for subkind class function %s with these argument types" name

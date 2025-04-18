@@ -234,7 +234,7 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "addInt", int_op (+) PURE;
-  "subInt", int_op (-) PURE;
+  "-", int_op (-) PURE;
   "mulInt", int_op ( * ) PURE;
   "divInt", int_op (/) IMPURE;
   "powInt", int_op pow PURE;
@@ -363,10 +363,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Int) ~> a",
    IMPURE);
 
-  (*"show",
+  "show",
   (p1 (fun v -> Value.box_string (Value.string_of_value v)),
    datatype "(a) ~> String",
-   IMPURE);*)
+   IMPURE);
 
   "exit",
   (`Continuation Value.Continuation.empty,

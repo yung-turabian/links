@@ -45,6 +45,7 @@ let config libdir = [
   "jsliburl=/lib/js";
   Printf.sprintf "jslibdir=%s/js" libdir;
   Printf.sprintf "stdlib_path=%s/stdlib" libdir;
+  Printf.sprintf "prelude_mods=%s/prelude_mods" libdir;
   "#database_driver=postgresql";
   "#database_args=localhost:5432:user:pass" ]
 

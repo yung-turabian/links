@@ -26,16 +26,6 @@ class Ord : (a::Eq) {
 		sig minumum : (a, a) -> a;
 }
 
-fun minimum(a,b) {
-  if (a < b) { a }
-  else { b }
-}
-
-fun maximum(a,b) {
-  if (a > b) { a }
-  else { b }
-}
-
 instance Ord : Int {
 		maximum : maximum
 }

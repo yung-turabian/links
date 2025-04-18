@@ -49,20 +49,32 @@ infixl 7 *;
 class Num : (a) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
+		sig `minus` : (a, a) -> a;
+	#	sig - : (a, a) -> a;
+		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
+		sig ^ : (a, a) -> a;
+		#sig `abs` : (a) -> a;
 }
 
 
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
+		`minus` : subInt;
+		/ : divInt;
 		`negate` : negInt;
+		^ : powInt;
+		#`abs` : fun (x) { if (x < 0) -x else x };
 }
 
 instance Num : Float {
 		+ : addFloat;
 		* : mulFloat;
+		`minus` : subFloat;
+		/ : divFloat;
 		`negate` : negFloat;
+		^ : powFloat;
 }
 
 class UnsafeNum : (a) {
@@ -74,5 +86,3 @@ instance UnsafeNum : Nat {
 #		* : mulNat;
 #		`negate` : negNat;
 }
-
-Zero + Zero

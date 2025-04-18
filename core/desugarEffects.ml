@@ -259,7 +259,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       with NotFound _ -> raise (Errors.unbound_tycon (SourceCode.WithPos.pos dt) tycon)
     in
     match ListUtils.last_opt param_kinds with
-    | Some (PrimaryKind.Row, (_, "Effect")) -> Some `Alias
+    | Some (PrimaryKind.Row, (_, "Eff")) -> Some `Alias
     | _ -> None )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
   | _ -> None
@@ -335,7 +335,7 @@ let cleanup_effects tycon_env =
                | _, [] -> []
                | [], Row t :: ts ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go ([], ts)
-               | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts
+               | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts
                  ->
                    Row (self#effect_row ~allow_shared:`Disallow t) :: go (qs, ts)
                | (([] as qs) | _ :: qs), t :: ts ->
@@ -454,13 +454,10 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
            match eff_var with
            | Datatype.Open stv
              when (not (SugarTypeVar.is_resolved stv))
-                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, (SugarKind.mk_unresolved_none)), `Rigid)
-                  
+                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, (SugarKind.mk_unresolved_none)), `Rigid)     
              ->
                self#with_implicit
-               
            | _ -> self )
-           
        | TypeApplication (name, ts) -> (
            let tycon_info = SEnv.find_opt name tycon_env in
            let self = self#list (fun o ta -> o#type_arg ta) ts in
@@ -469,7 +466,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
              when List.length param_kinds = List.length ts + 1 ->
                let poss_with_implicit =
                  match ListUtils.last param_kinds with
-                 | PrimaryKind.Row, (_, "Effect") ->
+                 | PrimaryKind.Row, (_, "Eff") ->
                      self#with_implicit
                  | _ -> self
                in
@@ -485,7 +482,7 @@ let gather_operation_of_type tp
     let module FieldEnv = Utility.StringMap in
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
-      primary = PrimaryKind.Row && restriction = "Effect"
+      primary = PrimaryKind.Row && restriction = "Eff"
     in
     let o =
       object (o : 'self_type)
@@ -659,7 +656,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -710,7 +707,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     mismatches, assuming spare rows are effects. *)
               function
               | _, [] -> o
-              | (PrimaryKind.Row, (_, "Effect")) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, "Eff")) :: qs, Row t :: ts ->
                   go (o#effect_row t) (qs, ts)
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
@@ -894,7 +891,7 @@ class main_traversal simple_tycon_env =
               let module PK = PrimaryKind in
               let process_type_arg i : Kind.t * type_arg -> Datatype.type_arg =
                 function
-                | (PK.Row, (_, "Effect")), Row r ->
+                | (PK.Row, (_, "Eff")), Row r ->
                     let _o, erow = o#effect_row ~in_alias:(Some tycon) r in
                     Row erow
                 | (PK.Row, _), Row r ->
@@ -928,7 +925,7 @@ class main_traversal simple_tycon_env =
 
               let may_procide_shared_effect =
                 match ListUtils.last_opt params with
-                | Some (PrimaryKind.Row, (_, "Effect")) ->
+                | Some (PrimaryKind.Row, (_, "Eff")) ->
                     has_effect_sugar ()
                 | _ -> false
               in
@@ -1023,12 +1020,15 @@ class main_traversal simple_tycon_env =
               raise (DesugarTypeVariables.free_type_variable dpos);
 
             let _name, (is_eff, kind), freedom = SugarTypeVar.get_unresolved_exn stv in
-            let (lin, res) = SugarKind.get_unresolved_sk_exn kind in
-            let sk = (match lin, res with
-            | Some l, Some r -> Some (l, r)
-            | None, None -> None
-            | _ -> failwith "desugarEffects.ml") in
-            let mtv = make_anon_point ~is_eff:is_eff (PrimaryKind.Row) sk freedom in
+            let (lin, rest) = SugarKind.get_unresolved_sk_exn kind in
+            let sk = 
+              match lin, rest with
+              | None, Some rest -> Some (lin_unl, rest)
+              | Some lin, Some rest -> Some (lin, rest)
+              | Some lin, None -> failwith "shouldn't happen"
+              | None, None -> None
+            in
+            let mtv = make_anon_point ~is_eff:is_eff pk_row sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
         | D.Open srv when not (SugarTypeVar.is_resolved srv) ->

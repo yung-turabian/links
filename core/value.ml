@@ -770,6 +770,7 @@ let rec typ : t -> Types.datatype = function
   | `Float _ -> Types.float_type
   | `Char _ -> Types.char_type
   | `String _ -> Types.string_type
+  | `List [v] -> Types.make_list_type (typ v)
   | _ -> failwith "value.ml; Not implemented this type in the checker."
 
 (** {1 Pretty-printing values} *)

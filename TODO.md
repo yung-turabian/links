@@ -1,11 +1,14 @@
 # TODO
 
-+ Update CFun to take a list of type and implementation binder and it should be all set to go.
++ Confirm that ensure kinded works, and make sure all references to subkind classes requiring kinded information is gone.
 
-+ Constraint doesn't seem to halt unsupported type operations
+## Future plans
 
-+ If not polymorphic functions can be resolved at compile time but if not then will be resolved at runtime in evalir.
-
-+ Better error handling.
++ SO YOU CAN USE MINUS, when parsing operators should be of Section.Name (or Section.Minus) instead read as strings.
 
 + Update repl.ml and types.ml so you can print subkind environment.
+
++ Better error handling.
+    + Check that an instance completes the class' contracts
+
++ If not polymorphic functions can be resolved at compile time but if not then will be resolved at runtime in evalir.
