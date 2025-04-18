@@ -131,9 +131,9 @@ perhaps. *)
 let kind_of p =
   let open Kind in function
   (* primary kind abbreviation  *)
-  | "Type"     -> SugarKind.mk_resolved (Some pk_type) None
-  | "Row"      -> SugarKind.mk_resolved (Some pk_row) None (* either a value row or an effect row *)
-  | "Presence" -> SugarKind.mk_resolved (Some pk_presence) None
+  | "Type"     -> SugarKind.mk_unresolved (Some pk_type) (None, None)
+  | "Row"      -> SugarKind.mk_unresolved (Some pk_row) (None, None) (* either a value row or an effect row *)
+  | "Presence" -> SugarKind.mk_unresolved (Some pk_presence) (None, None)
   (* subkind of type abbreviations *)
   | k          -> SugarKind.mk_unresolved None (None, (Some k))
 

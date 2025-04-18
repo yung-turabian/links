@@ -502,8 +502,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
             (Class.funs c)
         in
         Class (Class.modify ~funs:funs' c)
-      | Infix { name; assoc; precedence } ->
-         Infix { name = self#fixity name; assoc; precedence }
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 

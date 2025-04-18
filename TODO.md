@@ -1,6 +1,6 @@
 # TODO
 
-+ Confirm that ensure kinded works, and make sure all references to subkind classes requiring kinded information is gone.
+
 
 ## Future plans
 
@@ -12,3 +12,5 @@
     + Check that an instance completes the class' contracts
 
 + If not polymorphic functions can be resolved at compile time but if not then will be resolved at runtime in evalir.
+
++ Make prelude_mods work as right now it results in NotFound because classes/instances cant be accessed from other modules.

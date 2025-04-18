@@ -57,7 +57,7 @@ let _ =
          let cwd = Sys.getcwd () in
          let config = "None" in
          let paths =
-           List.map (Filename.concat cwd) ["../lib/js"; "../examples"; "../lib/stdlib"; "../prelude.links"]
+           List.map (Filename.concat cwd) ["../lib/js"; "../examples"; "../lib/stdlib"; "../lib/prelude_mods"; "../prelude.links"]
          in
          config :: paths
   in

@@ -5414,45 +5414,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
         (Instance (class_name, dt, instances)
                 , empty_context, Usage.empty)
-        (*let env = (fun env { instance_binder; _
-                               } -> 
-            bind_subkind env (
-              (Binder.to_name instance_binder),
-              
-              )
-          ) empty_context i in*)
-
-        (*Sugartypes.add_implementation Sugartypes.OperationMap*)
-
-        (*List.iter (fun (m, p) -> Debug.print m ) i.instance_methods;*)
-
-              (*| Instance i -> 
-        let env = (fun env { instance_binder; 
-                                 instance_type; 
-                                 instance_methods } ->
-          let name = Binder.to_name instance_binder in
-            Debug.print ("Updating class: " ^ name);
-          let qs = lookup_subkind_quantifiers context.subkind_env name in
-          let _ty = instance_type in
-          let (env, ops) = 
-            List.fold_left (fun (env_acc, ops_acc) (op, body) -> 
-              let body_string = Format.asprintf "%a" pp_phrase body in
-              Debug.print ("\tUpdating class operator " ^ op  ^ " : " ^ body_string);
-              let body = tc body in
-
-              (*let bt =
-                match datatype with
-                  | Some (_, Some t) ->
-                      unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
-                      t
-                  | _ -> typ body in*)
-              
-              (env_acc, op :: ops_acc) 
-            ) (env, []) instance_methods in
-          bind_subkind env (name, `Class ((pk_type, (lin_any, name)), qs, ops))
-        ) empty_context i in
-        
-        (Instance i, env, Usage.empty)*)
       (** [subkind_binding] case for Subkind Classes *)
       (*| Class {class_binder; class_tyvar; class_methods} ->
 
@@ -5495,73 +5456,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           ) empty_context (class_binder, class_tyvar, class_methods) in
           
           (Class {class_binder; class_tyvar; class_methods}, env, Usage.empty)*)
-
-      (*            | Var v ->
-
-                  let context_body, ft, quantifiers =
-            match t_ann with
-              | None ->
-                  context, make_ft lin pats effects return_type, []
-              | Some ft ->
-                  (* make sure the annotation has the right shape *)
-                  let shape = make_ft lin pats effects return_type in
-                  let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
-
-                  (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
-                  let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos ft_mono) in
-                    (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
-                  (* HACK: Place a dummy name in the environment in
-                     order to ensure that the generalisation check
-                     does the right thing (it would be unsound to use
-                     the original name as the function is not
-                     recursive) *)
-                  let v = Utils.dummy_source_name () in
-                  bind_var context (v, ft_mono), ft, quantifiers in
-           begin
-           try
-             check_recursive_usage (WithPos.make ~pos expr) v context;
-             let (tyargs, t) = Utils.instantiate context.var_env v in
-             let e = match tyargs with
-               | [] -> Var v
-               | _ -> tappl (FreezeVar v, tyargs)
-             in
-             e, t, Usage.singleton v
-           with
-             Errors.UndefinedVariable _msg ->
-             Gripers.die pos ("Unknown variable " ^ v ^ ".")
-           end  | Val (pat, (_, body), location, datatype) ->
-          let body = tc body in
-          let pat = tpc pat in
-          let penv = pattern_env pat in
-          let bt =
-            match datatype with
-              | Some (_, Some t) ->
-                  unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
-                  t
-              | _ -> typ body in
-          let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
-          Types.Mono.make_type (pattern_typ pat);
-          let usage = usages body in
-          let body = erase body in
-          let tyvars, pat, penv =
-            if Utils.is_generalisable body then
-              let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
-              let pat = update_pattern_vars penv (erase_pat pat) in
-              let ((tyvars, _), _bt) = Utils.generalise context.var_env bt in
-              tyvars, pat, penv
-            else
-              (* All rigid type variables in bt should appear in the
-                 environment *)
-              let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
-              match tyvars with
-              | [] -> [], erase_pat pat, penv
-              | _ -> Gripers.value_restriction pos bt
-          in
-          let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
-            Val (pat, (sugar_tyvars, body), location, datatype),
-            {empty_context with
-              var_env = penv},
-            usage*)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in

@@ -74,7 +74,7 @@ let try_parse_file filename =
 
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: (List.map (check_n_chop) paths)
+    "" :: poss_prelude_mods @ poss_stdlib_dir @ (List.map (check_n_chop) paths)
   in
 
   (* Loop through, trying to open the module with each path *)
