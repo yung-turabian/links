@@ -21,13 +21,14 @@ class Num : (a::Type) {
 		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
 		sig ^ : (a, a) -> a;
+		sig `abs` : (a) -> a;
 }
 
 
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
-		##`minus` : subInt;
+		#`minus` : subInt;
 		/ : divInt;
 		`negate` : negInt;
 		^ : powInt;
@@ -40,11 +41,12 @@ instance Num : Float {
 		/ : divFloat;
 		`negate` : negFloat;
 		^ : powFloat;
+		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
 }
 
-#sig abs : (Int) -> Int
+#sig abs : (a::Num) -> a
 #fun abs(i) {
-#  if (i < 0) -i else i
+#  if (i < 0) `negate` i else i
 #}
 
 sig square : (a::Num) -> a

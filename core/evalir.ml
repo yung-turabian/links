@@ -274,6 +274,11 @@ struct
       in
       computation_yielding env cont body
     | `SubkindClassFunction (name), args ->
+
+      (*let (o, f, ft) = o#value f in
+      let (o, args, argument_types) = o#list (fun o -> o#value) args in
+      let parameter_types = arg_types ~overstep_quantifiers:false ft in*)
+
       let argtypes = Types.make_tuple_type (List.map Value.typ args) in
       let impl_var = 
         try SubkindTable.find_impl name argtypes
@@ -281,7 +286,6 @@ struct
           (** TODO: this should be caught earlier. *)
           eval_error "No implementation found for subkind class function %s with these argument types" name
       in
-      
       value env (Variable impl_var) >>= fun impl ->
       apply cont env (impl, args)
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->

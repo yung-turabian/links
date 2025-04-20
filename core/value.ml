@@ -771,6 +771,10 @@ let rec typ : t -> Types.datatype = function
   | `Char _ -> Types.char_type
   | `String _ -> Types.string_type
   | `List [v] -> Types.make_list_type (typ v)
+  | `XML _ -> Types.xml_type
+  | `DateTime _ -> Types.datetime_type
+  | `Variant (_, v) -> Types.Variant (typ v)
+  | `Database _ -> Types.database_type
   | _ -> failwith "value.ml; Not implemented this type in the checker."
 
 (** {1 Pretty-printing values} *)
