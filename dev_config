@@ -1,5 +1,4 @@
 show_kinds=full
-prelude=dummy.links
-debug=true
-show_subkindclasses=false
+debug=false
+show_subkindclasses=true
 show_generalisation=false

@@ -195,21 +195,21 @@ module type Constraint = sig
      true. *)
   val make_type : datatype -> unit
   val make_row : row -> unit
-
-  val operations : (string * (typ -> typ)) list
 end
 
-module ConstraintRegistry : sig
+module ConstraintEnv : sig
   (** A registry for managing constraint modules *)
+  val constraints : (string, (module Constraint)) Hashtbl.t
   
-  (** The type of constraint modules *)
-  type constraint_module = (module Constraint)
+  val create : string -> unit
   
   (** Register a new constraint with the given name *)
-  val register : string -> constraint_module -> unit
+  val register : ?replace:bool -> string -> (module Constraint) -> unit
 
   (** Retrieve a constraint by name *)
-  val get_restriction_constraint : string -> constraint_module option
+  val find : string -> (module Constraint) option
+
+  val update : string -> f:((module Constraint) -> (module Constraint)) -> unit
 end
 
 module Base : Constraint
@@ -218,17 +218,8 @@ module Session : Constraint
 module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
-val get_restriction_constraint : Restriction.t -> (module Constraint) option
-
-val create_constraint :
-  (typ -> bool) ->
-  (row -> bool) ->
-  (typ -> bool) ->
-  (row -> bool) ->
-  (typ -> unit) ->
-  (row -> unit) ->
-  (string * (typ -> typ)) list ->
-  (module Constraint)
+val get_constraint : Restriction.t -> (module Constraint) option
+val add_constraint : string -> unit
 
 val dual_row : row -> row
 val dual_type : datatype -> datatype

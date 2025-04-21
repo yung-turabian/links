@@ -621,7 +621,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) -> [a]",
   IMPURE);
 
-  (*"length",
+  "length",
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
    datatype "([a]) -> Int",
   PURE);
@@ -629,7 +629,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Sum",
   (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
    datatype "([Int]) -> Int",
-   PURE);*)
+   PURE);
 
   "take",
   (p2 (fun n l ->

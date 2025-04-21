@@ -280,7 +280,7 @@ let check_subkind var (lin, res) typ =
       raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                               " with the linear type " ^ string_of_datatype typ)));
 
-  match Types.get_restriction_constraint res with
+  match Types.get_constraint res with
   | None -> ()
   | Some const ->
      let module M = (val const) in
@@ -963,7 +963,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                  raise (Failure (`Msg ("Cannot force row " ^ string_of_row (Row extension_row) ^ " to be unlimited")));
 
              begin
-               match Types.get_restriction_constraint rest with
+               match Types.get_constraint rest with
                | None -> ()
                | Some const ->
                   let module M = (val const) in

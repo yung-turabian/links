@@ -1,16 +1,8 @@
-
-
-sig square : (a::Num) -> a
-fun square(x) {
-		x * x
+instance Num : Nat {
+		+ : addNat;
+#		* : mulNat;
+#		`negate` : negNat;
 }
-
-sig squares : (a::Num, a, a) -> (a, a, a)
-fun squares (x, y, z) {
-		(square(x), square(y), square(z))
-}
-
-`show` false
 
 
 # Sees that + is already defined with a kind signature, now has

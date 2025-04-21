@@ -252,17 +252,18 @@ object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
   val tyvar_map : tyvar_map = initial_map
+
   (* New subkinds are resolved here into the environment first. *)
   val subkind_env : Types.subkind_environment = subkind_env
 
   method private get_subkind_env = subkind_env
 
-  val subkind_classes : subkind_classes_map = StringMap.empty
+  val subkind_qs_map : subkind_classes_map = StringMap.empty
 
-  method private get_subkind_classes = subkind_classes
+  method private get_subkind_class = subkind_qs_map
 
-  method add_subkind_class name info = 
-    {< subkind_classes = StringMap.add name info subkind_classes >}
+  method set_subkind_class name info = 
+    {< subkind_qs_map = StringMap.add name info subkind_qs_map >}
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
@@ -459,7 +460,6 @@ object (o : 'self)
     let o, action_result = action o in
     let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
     o, resolved_qs, action_result
-  
 
 
   method! datatypenode =
@@ -679,7 +679,7 @@ object (o : 'self)
         | [] -> 
             Restriction.add ~parents:["Any"; "Mono"] name;
             Debug.if_set (CommonTypes.show_subkindclasses)
-              (fun () -> ("Adding restriction: " ^ name));
+              (fun () -> ("New restriction: " ^ name));
             
             o, []
         | _ ->
@@ -698,7 +698,7 @@ object (o : 'self)
                 ) in
 
                 Debug.if_set (CommonTypes.show_subkindclasses)
-                  (fun () -> ("Adding restriction: " ^ name));
+                  (fun () -> ("New restriction: " ^ name));
                 Debug.if_set (CommonTypes.show_subkindclasses)
                   (fun () -> Restriction.to_dot ());
 
@@ -716,7 +716,7 @@ object (o : 'self)
                   (fun () -> Restriction.to_dot () );
                 
                 let kind = SugarKind.mk_unresolved pk (lin, Some name) in
-
+                
                 let q = SugarQuantifier.mk_unresolved tyvar_name kind fd in
                 o, q
           ) qs
@@ -761,7 +761,6 @@ object (o : 'self)
           match def_kind with
           | _, (Some l, Some r) -> (l, r)
           | _, _ -> (lin_unl, name)
-          | _ -> failwith "Did not resolve kind, unknown why kinds can't be definite in KResolved."
         in
         pk, sk, SEnv.bind name (`Class ((pk, sk), [], StringMap.empty)) subkind_env 
       in
@@ -771,7 +770,7 @@ object (o : 'self)
         subkind = sk;
         quantifiers = unresolved_qs
       } in
-      let o = o#add_subkind_class name info in
+      let o = o#set_subkind_class name info in
       let o = o#set_subkind_env subkind_env in
 
       (o, b)
@@ -783,49 +782,39 @@ object (o : 'self)
 
       (* Look up the subkind class info *)
       let class_info = 
-        try StringMap.find class_name subkind_classes
+        try StringMap.find class_name subkind_qs_map
         with NotFound _ -> raise (internal_error ("Subkind class not found: " ^ class_name))
       in
-
+      
       (* Process the class *)
-      let o, resolved_qs, funs =
-      let handle_fun (o, (b, dt)) =
-        let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
-        let o = o#set_allow_implictly_bound_vars implicits_allowed in
-        let o = o#reset_vars in
-        let o, b = o#binder b in
-        let o, dt = o#datatype' dt in
-        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
-        o, (b, dt)
+      let o, resolved_qs, fun' = o#quantified 
+        ~rigidify:false class_info.quantifiers (fun o' -> 
+          let b, dt = (Class.fun' f) in
+          let o', b = o'#binder b in
+          let o', dt = o'#datatype' dt in
+
+          o', (b, dt)) 
       in
-
-
-      o#quantified ~rigidify:false class_info.quantifiers 
-        (fun o' -> 
-          let funs = Class.fun' f in
-          let o', funs = handle_fun (o', funs) in
-          o', funs
-        )
-      in
-
-      (** HACK: we are going to take for granted that signature quantifiers will
-          always be the same. *)
-      let qs = List.map SugarQuantifier.get_resolved_exn resolved_qs in 
 
       let subkind_env = 
-        let kinds = List.map Quantifier.to_kind qs in
-        let (pk ,sk) = List.hd kinds in
-        (** NOTE: Not binding functions yet as datatypes are not resolved. *)
-        SEnv.bind class_name (`Class ((Some pk, sk), qs, StringMap.empty)) subkind_env 
-      in
+        (** HACK: we are going to take for granted that signature quantifiers will
+          always be the same. *)
+        let qs = List.map SugarQuantifier.get_resolved_exn resolved_qs in 
 
-      Debug.print ("Class fun `" ^ fun_name ^ "` has quantifiers:");
-      List.iter (fun q -> Debug.print ("\t" ^ (Quantifier.to_string q))) qs;
+        Debug.print ("Class fun `" ^ fun_name ^ "` has quantifiers:");
+        List.iter (fun q -> Debug.print ("\t" ^ (Quantifier.to_string q))) qs;
+
+        let kinds = List.map Quantifier.to_kind qs in
+        (** NOTE: Not binding functions yet as datatypes are not resolved. *)
+        match kinds with
+        | [] -> subkind_env
+        | (pk, (lin, _))::_ ->
+          SEnv.bind class_name (`Class ((Some pk, (lin, class_name)), qs, StringMap.empty)) subkind_env
+      in
       let o = o#set_subkind_env subkind_env in
 
-      let funs = [ funs ] in
-
-      o, ClassFun (Class.modify ~funs ~quantifiers:resolved_qs f)
+      let f = Class.modify ~funs:[fun'] ~quantifiers:resolved_qs f in
+      o, ClassFun f
     | Foreign alien ->
        (* For alien bindings, signature determines whether implicitly
           bound vars are allowed *)

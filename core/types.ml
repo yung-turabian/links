@@ -565,112 +565,47 @@ module type Constraint = sig
      appropriate subkind, so that {!is_type} will return true. *)
   val make_type : typ -> unit
   val make_row : row -> unit
-
-   (* New: Associated functions for this constraint *)
-   val operations : (string * (typ -> typ)) list
 end
-(*
-module DynamicConstraint = struct
-  module type CONSTRAINT_CONFIG = sig
-    val name : string
-    val initial_types : Primitive.t list
-  end
 
-  module Make (Config : CONSTRAINT_CONFIG) : Constraint = struct
-    open Restriction
-    open Primitive
-
-    let allowed_primitives = ref Config.initial_types
-
-    let update_allowed_primitives prims = allowed_primitives := prims
-    let get_allowed_primitives () = !allowed_primitives
-
-    module Predicate = struct
-      class klass = object
-        inherit type_predicate as super
-
-        method! point_satisfies f vars point =
-          match Unionfind.find point with
-          | Recursive _ -> false
-          | _ -> super#point_satisfies f vars point
-
-        method! type_satisfies vars = function
-          | Not_typed -> assert false
-          | Var _ | Recursive _ | Closed ->
-             failwith "freestanding Var/Recursive/Closed not implemented yet"
-          | Alias _ as t -> super#type_satisfies vars t
-          | (Application _ | RecursiveApplication _) -> false
-          | Meta _ as t -> super#type_satisfies vars t
-          | Primitive p -> List.mem p !allowed_primitives
-          | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
-          | ForAll ([], t) -> super#type_satisfies vars t
-          | Effect _ as t -> super#type_satisfies vars t
-          | Operation _ -> failwith "Operation not implemented"
-          | Row _ as t -> super#type_satisfies vars t
-          | Absent -> true
-          | Present _ as t -> super#type_satisfies vars t
-          | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
-      end
-    end
-
-    let type_satisfies, row_satisfies = 
-      make_restriction_predicate (module Predicate) Config.name false
-    let can_type_be, can_row_be = 
-      make_restriction_predicate (module Predicate) Config.name true
-    let make_type, make_row = 
-      make_restriction_transform Config.name
-
-
-  end
-
+module EmptyConstraint : Constraint = struct
+  let type_satisfies _ = false
+  let row_satisfies _ = false
+  let can_type_be _ = false
+  let can_row_be _ = false
+  let make_type _ = ()
+  let make_row _ = ()
 end
-*)
 
-module ConstraintRegistry = struct
-  
-  type constraint_module = (module Constraint)
+module ConstraintEnv = struct
+  let constraints : (string, (module Constraint)) Hashtbl.t = Hashtbl.create 16
 
-  (** A table of all possible constraints in the system *)
-  let constraints : (string, constraint_module) Hashtbl.t = Hashtbl.create 16
+  (** Create a new constraint with an empty default implementation. *)
+  let create name =
+    if Hashtbl.mem constraints name then
+      failwith ("Constraint " ^ name ^ " already exists")
+    else
+      Hashtbl.add constraints name (module EmptyConstraint : Constraint)
 
-  let register name constraint_module =
-    Hashtbl.add constraints name constraint_module
+  (** Register a full constraint (override if [replace=true]). *)
+  let register ?(replace=false) name (constraint_module : (module Constraint)) =
+    if not replace && Hashtbl.mem constraints name then
+      failwith ("Constraint " ^ name ^ " already registered")
+    else
+      Hashtbl.replace constraints name constraint_module
 
-  (*TODO: rename to get_constraint *)
-  let get_restriction_constraint name =
+  (** Get a constraint (returns EmptyConstraint if not found). *)
+  let find name =
     try Some (Hashtbl.find constraints name)
     with NotFound _ -> None
 
-  (* New: Lookup a specific operation in a constraint *)
-  let get_operation constraint_name op_name =
-    match get_restriction_constraint constraint_name with
-    | Some (module C) ->
-        List.assoc_opt op_name C.operations
-    | None -> None
-    
+  (** Update an existing constraint dynamically. *)
+  let update name ~f =
+    match Hashtbl.find_opt constraints name with
+    | Some (module C : Constraint) ->
+        let new_c = f (module C : Constraint) in
+        Hashtbl.replace constraints name new_c
+    | None -> failwith ("Constraint " ^ name ^ " not found")
 end
-
-(** Allows the construction of a {!Constraint}, which needs to be more a dynamic structure to allow
-    for subkind classes to be useful. *)
-let create_constraint
-  type_satisfies
-  row_satisfies
-  can_type_be
-  can_row_be
-  make_type
-  make_row
-  operations
-  : (module Constraint) =
-  (module struct
-    let type_satisfies = type_satisfies
-    let row_satisfies = row_satisfies
-    let can_type_be = can_type_be
-    let can_row_be = can_row_be
-    let make_type = make_type
-    let make_row = make_row
-    let operations = operations
-  end)
-
 
 (** A context for the various type visitors ({!type_predicate} and {!type_iter})
 
@@ -1169,12 +1104,14 @@ end
 
 (** Defaults *)
 let () =
-  ConstraintRegistry.register "Base" (module Base);
-  ConstraintRegistry.register "Session" (module Session);
-  ConstraintRegistry.register "Mono" (module Mono);
-  ConstraintRegistry.register "Num" (module Num)
+  ConstraintEnv.register "Base" (module Base);
+  ConstraintEnv.register "Session" (module Session);
+  ConstraintEnv.register "Mono" (module Mono);
+  ConstraintEnv.register "Num" (module Num)
 
-let get_restriction_constraint = ConstraintRegistry.get_restriction_constraint
+
+let get_constraint = ConstraintEnv.find
+let add_constraint = ConstraintEnv.create
 
 (* useful for debugging: types tend to be too big to read *)
 (*
