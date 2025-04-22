@@ -15,17 +15,17 @@ Addition, division, subtraction, and multiplication
 100.50 + 200.20 / 10.10 `sub` 3.10 * 10.10
 stdout : 89.0117821782 : Float
 
-Inproper usage
+Improper usage
 2 `sub` 3.3
 stderr : @..*
 exit : 1
 
-Inproper usage [2]
+Improper usage [2]
 mod(6.3)
 stderr : @..*
 exit : 1
 
-Inproper usage [3]
+Improper usage [3]
 `abs` (54.2 / 4)
 stderr : @..*
 exit : 1

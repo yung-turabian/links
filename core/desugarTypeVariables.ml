@@ -693,6 +693,7 @@ object (o : 'self)
                     Restriction.add ~parents:["Any"; "Mono"] name;
                     (lin_unl, name)
                 | _, Some (lin, rest) -> 
+                    (** TODO: adopt operations if they exist. *)
                     Restriction.add ~parents:[rest] name;
                     (lin, name)
                 ) in

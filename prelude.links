@@ -126,6 +126,14 @@ instance Show : Char {
 		`stringOf` : fun (c) { implode(c :: []) };
 }
 
+class Ord : (a) {
+		sig `lt` : (a, a) -> Bool;
+}
+
+class Eq : (a::Ord) {
+		sig `eqs` : (a, a) -> Bool;
+}
+
 fun square(x) {
 		x * x
 }
