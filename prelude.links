@@ -10,6 +10,7 @@ op ms ++ ns {
 		} 
 }
 
+infixr 8 ^;
 infixl 6 +;
 infixl 6 `sub`;
 infixl 7 *;
@@ -104,6 +105,26 @@ instance Num : Float {
 #		* : mulNat;
 #		`negate` : fun(n) { error("Attempted to negate a natural number.") };
 #}
+
+class Show : (a) {
+		sig `stringOf` : (a) -> String;
+}
+
+instance Show : Bool {
+		`stringOf` : fun (x) { if (x == true) "True" else "False" };
+}
+
+instance Show : Int {
+		`stringOf` : intToString;
+}
+
+instance Show : Float {
+		`stringOf` : floatToString;
+}
+
+instance Show : Char {
+		`stringOf` : fun (c) { implode(c :: []) };
+}
 
 fun square(x) {
 		x * x
