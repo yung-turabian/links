@@ -504,7 +504,7 @@ class_datatypes:
 
 subkind_block:
 | CLASS name=CONSTRUCTOR COLON quantifiers=typeargs_opt 
-  LBRACE funs=class_datatypes RBRACE                        {
+  LBRACE funs=class_datatypes RBRACE                           {
                                                                   with_pos $loc (Class (Class.multi name quantifiers funs))
                                                                }
 

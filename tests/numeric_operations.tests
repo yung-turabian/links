@@ -12,11 +12,11 @@ stderr : @.
 exit : 1
 
 Addition, division, subtraction, and multiplication
-100.50 + 200.20 / 10.10 - 3.10 * 10.10
+100.50 + 200.20 / 10.10 `sub` 3.10 * 10.10
 stdout : 89.0117821782 : Float
 
 Inproper usage
-2 - 3.3
+2 `sub` 3.3
 stderr : @..*
 exit : 1
 
@@ -26,16 +26,16 @@ stderr : @..*
 exit : 1
 
 Inproper usage [3]
-abs(54.2 / 4)
+`abs` (54.2 / 4)
 stderr : @..*
 exit : 1
 
 Absolute value of integer
-abs(-9)
+`abs` (`negate` 9)
 stdout : 9 : Int
 
 Absolute value of float
-abs(-9.54)
+`abs` (`negate` 9.54)
 stdout : 9.54 : Float
 
 Prefix notation
@@ -43,15 +43,15 @@ Prefix notation
 stdout : 7.5 : Float
 
 Unary minus
-(-1)
+(`negate` 1)
 stdout : -1 : Int
 
 Unary float minus
-(-1.0)
+(`negate` 1.0)
 stdout : -1.0 : Float
 
 Exponentiation and unary minus
-(-(2.5^4.0))
+(`negate`(2.5^4.0))
 stdout : -39.0625 : Float
 
 Modulo [1]
@@ -80,7 +80,7 @@ Float division by zero [1]
 stdout : inf : Float
 
 Float division by zero [2]
-(-1.0) / 0.0
+(`negate` 1.0) / 0.0
 stdout : -inf : Float
 
 Large floating-point numbers

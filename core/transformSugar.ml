@@ -930,50 +930,9 @@ class transform (env : Types.typing_environment) =
 
         let o = o#restore_quantifiers outer_tyvars in
 
-        (* Construct a new subkind environment, and populate the map from
-        * strings to the desugared datatypes. *)
-        (*let o, name, qs =
-          (fun o' name qs ->
-
-              let resolved_qs = List.map SugarQuantifier.get_resolved_exn qs in
-              let pks = List.map (Quantifier.to_primary_kind) resolved_qs in
-              let sks = List.map (Quantifier.to_subkind) resolved_qs in
-              let pk, sk = match ListUtils.find_fstdiff pks with
-              | Some k -> 
-                raise (Errors.Type_error (SourceCode.Position.dummy,
-                       "All type variables must be of same kind, found: " ^ 
-                       PrimaryKind.to_string k))
-              | None ->
-                  let pk = 
-                    match pks with (* Already checked in desugarTypeVariables *)
-                    | [] -> pk_type
-                    | _ -> List.hd pks 
-                  in
-                  let sk = 
-                    match sks with (* Already checked in desugarTypeVariables *)
-                    | [] -> CommonTypes.default_subkind
-                    | _ -> List.hd sks 
-                  in
-                  (pk, sk)
-              in
-              (*let method_names = List.map fst class_methods in
-              let method_dts = List.map snd class_methods in
-              let method_typs = List.map snd method_dts in
-              let method_tys = List.map val_of method_typs in*)
-              (*List.iter2 (fun s t -> Debug.print ("\t" ^ s ^ " : " ^ Types.string_of_datatype t)) method_names method_tys;*)
-              
-              (* Defaults to restriction of its name, TODO: actually get kind, lin, res *)
-              let o' = o'#bind_subkind name (`Class ((pk, sk), resolved_qs, []) ) in
-
-              o', name, qs
-          ) o name qs
-        in*)
-
-
         (o, ClassDecl (name, qs))
 
       | Instance (class_name, dt, instances) ->
-
         let o, dt = o#datatype' dt in
         let (o, instances) =
           List.fold_right

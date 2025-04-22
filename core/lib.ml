@@ -240,7 +240,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "powInt", int_op pow PURE;
   "mod", int_op (mod) IMPURE;
   "addFloat", float_op (+.) PURE;
-  "subFloat", float_op (-.) PURE;
+  "-.", float_op (-.) PURE;
   "mulFloat", float_op ( *.) PURE;
   "divFloat", float_op (/.) PURE;
   "powFloat", float_op ( ** ) PURE;

@@ -179,6 +179,8 @@ val is_field_spec_body : field_spec -> bool
 
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
+  val name : Name.t
+
   val type_satisfies : datatype -> bool
   val row_satisfies : row -> bool
 
@@ -197,19 +199,20 @@ module type Constraint = sig
   val make_row : row -> unit
 end
 
+module DynamicConstraint : sig
+  val create : Name.t -> unit
+  val update : Name.t -> typ -> unit
+end
+
 module ConstraintEnv : sig
   (** A registry for managing constraint modules *)
   val constraints : (string, (module Constraint)) Hashtbl.t
-  
-  val create : string -> unit
-  
+    
   (** Register a new constraint with the given name *)
   val register : ?replace:bool -> string -> (module Constraint) -> unit
 
   (** Retrieve a constraint by name *)
   val find : string -> (module Constraint) option
-
-  val update : string -> f:((module Constraint) -> (module Constraint)) -> unit
 end
 
 module Base : Constraint
@@ -219,7 +222,7 @@ module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
 val get_constraint : Restriction.t -> (module Constraint) option
-val add_constraint : string -> unit
+val add_constraint : ?replace:bool -> string -> (module Constraint) -> unit
 
 val dual_row : row -> row
 val dual_type : datatype -> datatype
@@ -399,8 +402,6 @@ val unwrap_mapentry_type : typ -> typ * typ
 val unwrap_map_type : typ -> typ * typ
 
 val extract_tuple : row -> datatype list
-
-val extract_type_args : datatype -> datatype
 
 (** type constructors *)
 val make_tuple_type : datatype list -> datatype

@@ -59,14 +59,13 @@ end
 let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
-(* TODO: Considering getting this information form subkind environment instead *)
 module Restriction = struct
   type t = string
   [@@deriving eq,show]
 
   let graph : (t, t list) Hashtbl.t = Hashtbl.create 20
 
-  (* Initialize with default restrictions *)
+  (* Default restrictions *)
   let () =
     (* Any is the most general restriction *)
     Hashtbl.add graph "Any" [];
@@ -78,46 +77,45 @@ module Restriction = struct
     (* Effect is a direct child of Any *)
     Hashtbl.add graph "Eff" ["Any"]
 
-
   (* Check if a restriction exists *)
   let exists name = Hashtbl.mem graph name
-  
-  (* Find all descendants of a restriction (transitive closure) *)
-  let descendants r =
+
+  (* Get all ancestors (transitive closure of parents) *)
+  let ancestors r =
     let rec collect acc current =
-      let all_children = 
-        Hashtbl.fold (fun child parents acc ->
-          if List.mem current parents then child::acc else acc
-        ) graph [] in
-      List.fold_left (fun acc child ->
-        if List.mem child acc then acc
-        else collect (child::acc) child
-      ) acc all_children
+      let direct_parents = try Hashtbl.find graph current with Not_found -> [] in
+      List.fold_left (fun acc parent ->
+        if List.mem parent acc then acc
+        else collect (parent::acc) parent
+      ) acc direct_parents
     in
     if exists r then collect [] r else []
 
-  (* Compute the minimum of two restrictions (most specific common ancestor) *)
-  let min r1 r2 =
-    if r1 = r2 then Some r1
-    else 
-      let ancestors_r1 = Hashtbl.find graph r1 in
-      let ancestors_r2 = Hashtbl.find graph r2 in
-      (* Find common ancestors and return the most specific one *)
-      let common = List.filter (fun a -> List.mem a ancestors_r2) ancestors_r1 in
-      match common with
-      | [] -> None
-      | _ -> 
-          (* Find the most specific common ancestor (minimum in the hierarchy) *)
-          List.fold_left (fun acc a ->
-            match acc with
-            | None -> Some a
-            | Some current ->
-                if List.mem current (Hashtbl.find graph a)
-                then Some current
-                else if List.mem a (Hashtbl.find graph current)
-                then Some a
-                else Some current
-          ) None common
+    (** Computes the the minimum of two restricitons, if both are on the same level then get the more general. *)
+    let min r1 r2 =
+      if r1 = r2 then Some r1
+      else 
+        let is_r1_ancestor_of_r2 = List.mem r1 (ancestors r2) in
+        let is_r2_ancestor_of_r1 = List.mem r2 (ancestors r1) in
+        match is_r1_ancestor_of_r2, is_r2_ancestor_of_r1 with
+        | true, false -> Some r2  (* r1 is more general than r2 *)
+        | false, true -> Some r1  (* r2 is more general than r1 *)
+        | _ ->
+            (* Neither is ancestor of the other - find common ancestors *)
+            let ancestors_r1 = ancestors r1 in
+            let ancestors_r2 = ancestors r2 in
+            let common = List.filter (fun a -> List.mem a ancestors_r2) ancestors_r1 in
+            match common with
+            | [] -> None
+            | _ ->
+                List.fold_left (fun acc a ->
+                  match acc with
+                  | None -> Some a
+                  | Some current ->
+                      if List.mem a (ancestors current) then Some current
+                      else if List.mem current (ancestors a) then Some a
+                      else Some current
+                ) None common
 
   (* Add a new restriction dynamically *)
   let add ?(parents=["Any"]) name =
@@ -139,15 +137,6 @@ module Restriction = struct
       ) graph [] in
     topological_sort nodes edges
 
-  (* Check if the graph is acyclic (should be true for restrictions) *)
-    let is_acyclic () =
-      let nodes = Hashtbl.fold (fun k _ acc -> k::acc) graph [] in
-      let edges = 
-        Hashtbl.fold (fun child parents acc ->
-          List.map (fun parent -> (child, parent)) parents @ acc
-        ) graph [] in
-      List.length (strongly_connected_components nodes edges) = List.length nodes
-
   (* Convert a restriction to its string representation *)
   let to_string r = r
 
@@ -163,6 +152,20 @@ module Restriction = struct
     ) graph;
     Buffer.add_string buf "}\n";
     Buffer.contents buf
+
+    (** These can be deleted. *)
+    let () =
+      assert (min "Any" "Base" = Some "Base");
+      assert (min "Base" "Any" = Some "Base");
+      assert (min "Base" "Mono" = Some "Base");
+      assert (min "Mono" "Base" = Some "Base");
+
+      assert (min "Any" "Session" = Some "Session");
+      assert (min "Session" "Any" = Some "Session");
+
+      assert (min "Base" "Session" = Some "Mono");
+      assert (min "Session" "Base" = Some "Mono");
+      assert (min "Eff" "Session" = Some "Any")
 
 end
 

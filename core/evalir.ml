@@ -279,12 +279,11 @@ struct
       let (o, args, argument_types) = o#list (fun o -> o#value) args in
       let parameter_types = arg_types ~overstep_quantifiers:false ft in*)
 
-      let argtypes = Types.make_tuple_type (List.map Value.typ args) in
+      let argtypes = List.map Value.typ args in
       let impl_var = 
         try SubkindTable.find_impl name argtypes
         with NotFound _ ->
-          (** TODO: this should be caught earlier. *)
-          eval_error "No implementation found for subkind class function %s with these argument types" name
+          eval_error "Uncaught subkind class function %s." name
       in
       value env (Variable impl_var) >>= fun impl ->
       apply cont env (impl, args)
@@ -605,7 +604,7 @@ struct
         | CInst (b, (op, _, tc)) ->
           let var = Var.var_of_binder b in
           let typ = Var.type_of_binder b in
-          let argtype = Types.extract_type_args typ in
+          let argtype = TypeUtils.arg_types typ in
           let locals = Value.Env.localise env var in
           let cont' =
             K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in

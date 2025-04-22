@@ -954,10 +954,10 @@ struct
               I.condition (ev e1, ec e2, cofv (I.constant (Constant.Bool false)))
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
-          (*| UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
-              cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
+          | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
+              cofv (I.apply_pure(instantiate_mb "negInt", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
-              cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))*)
+              cofv (I.apply_pure(instantiate_mb "negFloat", [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->

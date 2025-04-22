@@ -550,6 +550,7 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t = fst
 (** A constraint provides a way of ensuring a type (or row) satisfies the
    requirements of some subkind. *)
 module type Constraint = sig
+  val name : Name.t
   (** Does this type satisfy the requirements of this subkind? *)
   val type_satisfies : typ -> bool
   val row_satisfies : row -> bool
@@ -565,46 +566,6 @@ module type Constraint = sig
      appropriate subkind, so that {!is_type} will return true. *)
   val make_type : typ -> unit
   val make_row : row -> unit
-end
-
-module EmptyConstraint : Constraint = struct
-  let type_satisfies _ = false
-  let row_satisfies _ = false
-  let can_type_be _ = false
-  let can_row_be _ = false
-  let make_type _ = ()
-  let make_row _ = ()
-end
-
-module ConstraintEnv = struct
-  let constraints : (string, (module Constraint)) Hashtbl.t = Hashtbl.create 16
-
-  (** Create a new constraint with an empty default implementation. *)
-  let create name =
-    if Hashtbl.mem constraints name then
-      failwith ("Constraint " ^ name ^ " already exists")
-    else
-      Hashtbl.add constraints name (module EmptyConstraint : Constraint)
-
-  (** Register a full constraint (override if [replace=true]). *)
-  let register ?(replace=false) name (constraint_module : (module Constraint)) =
-    if not replace && Hashtbl.mem constraints name then
-      failwith ("Constraint " ^ name ^ " already registered")
-    else
-      Hashtbl.replace constraints name constraint_module
-
-  (** Get a constraint (returns EmptyConstraint if not found). *)
-  let find name =
-    try Some (Hashtbl.find constraints name)
-    with NotFound _ -> None
-
-  (** Update an existing constraint dynamically. *)
-  let update name ~f =
-    match Hashtbl.find_opt constraints name with
-    | Some (module C : Constraint) ->
-        let new_c = f (module C : Constraint) in
-        Hashtbl.replace constraints name new_c
-    | None -> failwith ("Constraint " ^ name ^ " not found")
 end
 
 (** A context for the various type visitors ({!type_predicate} and {!type_iter})
@@ -802,10 +763,113 @@ let make_restriction_transform ?(ensure=false) subkind =
        | (_, _, `Rigid) -> assert ensure
    end)#visitors
 
-(* TODO Constraints should also be handled dynamically. *)
+module ConstraintEnv = struct
+  let constraints : (string, (module Constraint)) Hashtbl.t = Hashtbl.create 16
+
+  (** Register a full constraint (override if [replace=true]). *)
+  let register ?(replace=false) name (constraint_module : (module Constraint)) =
+    if not replace && Hashtbl.mem constraints name then
+      failwith ("Constraint " ^ name ^ " already registered")
+    else
+      Hashtbl.replace constraints name constraint_module
+
+  (** Get a constraint (returns EmptyConstraint if not found). *)
+  let find name =
+    try Some (Hashtbl.find constraints name)
+    with NotFound _ -> None
+
+  (** Update an existing constraint dynamically. *)
+  let update name ~f =
+    match Hashtbl.find_opt constraints name with
+    | Some (module C : Constraint) ->
+        let new_c = f (module C : Constraint) in
+        Hashtbl.replace constraints name new_c
+    | None -> failwith ("Constraint " ^ name ^ " not found")
+end
+
+(** Used in conjunction with the new subkind classes. *)
+module DynamicConstraint = struct
+
+  let type_patterns : (string, typ list) Hashtbl.t = Hashtbl.create 16
+
+  let create name =
+    let module Instance = struct
+      let name = name
+
+      module Predicate = struct
+        class klass = object
+          inherit type_predicate as super
+  
+          method! point_satisfies f vars point =
+            match Unionfind.find point with
+            | Recursive _ -> false
+            | _ -> super#point_satisfies f vars point
+  
+          method! type_satisfies vars = function
+            | Not_typed -> assert false
+            | Var _ | Recursive _ | Closed ->
+              failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+            | (Application _ | RecursiveApplication _) -> false
+            | Meta _ as t  -> super#type_satisfies vars t
+            | _  -> false
+        end
+      end 
+
+      let type_satisfies, row_satisfies = make_restriction_predicate (module Predicate) name false
+      let can_type_be, can_row_be = make_restriction_predicate (module Predicate) name true
+      let make_type, make_row = make_restriction_transform name
+    end in
+    ConstraintEnv.register name (module Instance : Constraint)
+
+    let update name typ =
+      let c = ConstraintEnv.find name in
+      match c with
+      | Some _ ->
+        let existing =
+          match Hashtbl.find_opt type_patterns name with
+          | Some ts -> ts
+          | None -> []
+        in
+        Hashtbl.replace type_patterns name (typ :: existing);
+
+        let known_typs = typ :: existing in
+
+        let module Instance = struct
+          open Restriction
+          open Primitive
+          let name = name
+    
+          module Predicate = struct
+            class klass = object
+              inherit type_predicate as super
+    
+              method! point_satisfies f vars point =
+                match Unionfind.find point with
+                | Recursive _ -> false
+                | _ -> super#point_satisfies f vars point
+    
+              method! type_satisfies vars = function
+                | Not_typed -> assert false
+                | Var _ | Recursive _ | Closed ->
+                  failwith "[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)"
+                | Meta _ as t -> super#type_satisfies vars t
+                | t -> List.exists (fun known -> known = t) known_typs
+            end
+          end
+    
+          let type_satisfies, row_satisfies = make_restriction_predicate (module Predicate) name false
+          let can_type_be, can_row_be = make_restriction_predicate (module Predicate) name true
+          let make_type, make_row = make_restriction_transform name
+        end in
+        ConstraintEnv.register ~replace:true name (module Instance : Constraint)
+      | None -> failwith "Attempting to update constraint that doesn't exist"    
+end
+
+
 module Base : Constraint = struct
   open Restriction
   open Primitive
+  let name = "Base"
 
   module BasePredicate = struct
     class klass = object
@@ -842,71 +906,15 @@ module Base : Constraint = struct
     end
   end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) "Base" false
-  let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) "Base" true
-  let make_type, make_row = make_restriction_transform "Base"
-
-  let operations = []
-end
-
-module Num : Constraint = struct
-  open Restriction
-  open Primitive
-
-  module NumPredicate = struct
-    class klass = object
-      inherit type_predicate as super
-
-      method! point_satisfies f vars point =
-        match Unionfind.find point with
-        | Recursive _ -> false
-        | _ -> super#point_satisfies f vars point
-
-      method! type_satisfies vars = function
-        (* Unspecified kind *)
-        | Not_typed -> assert false
-        | Var _ | Recursive _ | Closed ->
-           failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-        | Alias _  as t  -> super#type_satisfies vars t
-        | (Application _ | RecursiveApplication _) -> false
-        | Meta _ as t  -> super#type_satisfies vars t
-        (* Type *)
-        | Primitive (Int | Float) -> true
-        | Primitive _ -> false
-        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
-        | ForAll ([], t) -> super#type_satisfies vars t
-        (* Effect *)
-        | Effect _ as t -> super#type_satisfies vars t
-        | Operation _ -> failwith "TODO types.ml/766"
-        (* Row *)
-        | Row _ as t -> super#type_satisfies vars t
-        (* Presence *)
-        | Absent -> true
-        | Present _ as t -> super#type_satisfies vars t
-        (* Session *)
-        | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
-    end
-  end
-
-  let type_satisfies, row_satisfies = make_restriction_predicate (module NumPredicate) "Num" false
-  let can_type_be, can_row_be = make_restriction_predicate (module NumPredicate) "Num" true
-  let make_type, make_row = make_restriction_transform "Num"
-
-
-  (* New: Define operations for Num *)
-  let operations = [
-    ("negate", fun t ->
-      match t with
-      | Primitive Int -> Primitive Int  (* negate : Int -> Int *)
-      | Primitive Float -> Primitive Float  (* negate : Float -> Float *)
-      | _ -> failwith "Num.negate: unsupported type"
-    );
-  ]
-
+  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) name false
+  let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) name true
+  let make_type, make_row = make_restriction_transform name
 end
 
 (* unl type stuff *)
 module Unl : Constraint = struct
+  let name = "Unl"
+
   class unl_predicate = object(o)
     inherit type_predicate as super
 
@@ -1007,11 +1015,11 @@ module Unl : Constraint = struct
        | (v, (pk, (_, sk)), `Flexible) -> Unionfind.change point (Var (v, (pk, (lin_unl, sk)), `Flexible))
        | (_, _, `Rigid) -> assert false
    end)#visitors
-
-  let operations = []
 end
 
 module Session : Constraint = struct
+  let name = "Session"
+
   open Restriction
 
   module SessionPredicate = struct
@@ -1044,8 +1052,8 @@ module Session : Constraint = struct
     end
   end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) "Session" false
-  let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) "Session" true
+  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) name false
+  let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) name true
   let make_type, make_row =
     (object
        inherit type_iter as super
@@ -1054,8 +1062,8 @@ module Session : Constraint = struct
          | (_, (_, (_, "Session")), _) -> ()
          | (v, (pk, (l, sk)), `Flexible) ->
             begin
-              match Restriction.min sk "Session" with
-              | Some "Session" -> Unionfind.change point (Var (v, (pk, (l, "Session")), `Flexible))
+              match Restriction.min sk name with
+              | Some name -> Unionfind.change point (Var (v, (pk, (l, name)), `Flexible))
               | _ -> assert false
             end
          | (_, _, `Rigid) -> assert false
@@ -1065,10 +1073,11 @@ module Session : Constraint = struct
          | ty -> super#visit_type vars ty
      end)#visitors
 
-     let operations = []
 end
 
 module Mono : Constraint = struct
+  let name = "Mono"
+
   open Restriction
 
      module MonoPredicate = struct
@@ -1097,21 +1106,19 @@ module Mono : Constraint = struct
               | None -> false
      end)#predicates
 
-  let make_type, make_row = make_restriction_transform ~ensure:true "Mono"
+  let make_type, make_row = make_restriction_transform ~ensure:true name
 
-  let operations = []
 end
 
 (** Defaults *)
 let () =
   ConstraintEnv.register "Base" (module Base);
   ConstraintEnv.register "Session" (module Session);
-  ConstraintEnv.register "Mono" (module Mono);
-  ConstraintEnv.register "Num" (module Num)
-
+  ConstraintEnv.register "Unl" (module Unl);
+  ConstraintEnv.register "Mono" (module Mono)
 
 let get_constraint = ConstraintEnv.find
-let add_constraint = ConstraintEnv.create
+let add_constraint = ConstraintEnv.register
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -1885,12 +1892,6 @@ let extract_tuple = function
          | Absent | Meta _ -> assert false
          | _ -> raise tag_expectation_mismatch) field_env
   | _ -> raise tag_expectation_mismatch
-
-
-let extract_type_args = function
-| Function (args, _effs, _retty) ->
-    args
-| _ -> raise tag_expectation_mismatch
 
 exception TypeDestructionError of string
 

@@ -406,10 +406,15 @@ object (self)
   method! bindingnode = function
     | ClassDecl (name, qs) ->
 
-      (* TODO: create constraint here *)
-
       Debug.print ("Creating constraint " ^ name);
-      
+      Types.DynamicConstraint.create name;
+
+
+      (*Types.update_dyn_constraint (function
+      | Types.Primitive Primitive.Int -> true
+      | Types.Primitive Primitive.Float -> false
+      | _ -> false
+      );*)      
       (*(* Desugar all DTs *)
       let class_methods =
         (fun qs ->
@@ -535,6 +540,17 @@ object (self)
       let _, binder = self#binder binder in
       let datatype = Desugar.datatype' alias_env datatype in
       self, ClassFun (Class.modify ~funs:[(binder, datatype)] f)
+
+    | Instance (class_name, dt, _instances) as b ->
+      Debug.print ("Updating constraint `" ^ class_name ^ "`");
+      let (dt', typ) = Desugar.datatype' alias_env dt in
+      let () =
+        match typ with
+        | Some t -> Types.DynamicConstraint.update class_name t;
+        | None -> ()
+      in
+
+      super#bindingnode b
     | b -> super#bindingnode b
 
 

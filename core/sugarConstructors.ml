@@ -210,14 +210,6 @@ module SugarConstructors (Position : Pos)
                             module_members = members
                           })
 
-  (* Create a subkind class binding. *)
-  (*let class_binding ?(ppos=dp) name tyvars methods =
-    with_pos ppos (Class { 
-                            class_name = name; 
-                            class_tyvars = tyvars;
-                            class_methods = methods
-                         })*)
-
   (* Create a subkind class instance. *)
   let instance_binding ?(ppos=dp) class_name typ methods =
     with_pos ppos (Instance (

@@ -11,6 +11,7 @@ op ms ++ ns {
 }
 
 infixl 6 +;
+infixl 6 `sub`;
 infixl 7 *;
 infixl 7 /;
 
@@ -67,11 +68,10 @@ fun mulNat(n1, n2) {
 		}
 }
 
-class Num : (a::Type) {
+class Num : (a::Type(Unl, Any)) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
-		sig `minus` : (a, a) -> a;
-	#	sig - : (a, a) -> a;
+		sig `sub` : (a, a) -> a;
 		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
 		sig ^ : (a, a) -> a;
@@ -82,7 +82,7 @@ class Num : (a::Type) {
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
-		#`minus` : subInt;
+		`sub` : (-);
 		/ : divInt;
 		`negate` : negInt;
 		^ : powInt;
@@ -92,7 +92,7 @@ instance Num : Int {
 instance Num : Float {
 		+ : addFloat;
 		* : mulFloat;
-		`minus` : subFloat;
+		`sub` : (-.);
 		/ : divFloat;
 		`negate` : negFloat;
 		^ : powFloat;
@@ -102,15 +102,9 @@ instance Num : Float {
 #instance Num : Nat {
 #		+ : addNat;
 #		* : mulNat;
-#		`negate` : negNat;
+#		`negate` : fun(n) { error("Attempted to negate a natural number.") };
 #}
 
-sig abs : (Int) -> Int
-fun abs(i) {
-  if (i < 0) `negate` i else i
-}
-
-sig square : (a::Num) -> a
 fun square(x) {
 		x * x
 }
@@ -335,7 +329,6 @@ fun product(ns) {
 }
 
 fun mapi(f, xs) {
-  sig mi : (Int, [a]) ~> [a]
   fun mi(i, xs) {
     switch (xs) {
       case []    -> []
@@ -429,11 +422,6 @@ fun dropWhile(pred, list) {
 #   else if (i < 0) -1
 #   else 0
 # }
-
-sig abs : (Int) -> Int
-fun abs(i) {
-  if (i < 0) -i else i
-}
 
 sig init : ([a]) ~> [a]
 fun init(list) {
@@ -1460,7 +1448,7 @@ typename Pid(a::Type) = Process({hear: a});
 # The effect row variable `e` can have kind `Row(Any)` because no linear
 # resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+#sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1470,7 +1458,7 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+#sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   xlin;
   var ap = new();
@@ -1481,7 +1469,7 @@ fun linFork(f) {
 }
 
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
+#sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   xlin;
   var x = accept(ap);
@@ -1499,7 +1487,7 @@ fun reproduce(ap, f) {
 # run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
+#sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   xlin;
   var ap = new();
@@ -1545,7 +1533,7 @@ fun makeEndBang() {
 # with split ends we synchronise on the termination of each spawned
 # child process
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
+#sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
   xlin;
   var ap = new();
@@ -1558,7 +1546,7 @@ fun forkSync(f) {
 }
 
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
+#sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   xlin;
   var ap = new();
@@ -1571,7 +1559,7 @@ fun linForkSync(f) {
 }
 
 #sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
-sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
+#sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
   xlin;
   link(s, c);

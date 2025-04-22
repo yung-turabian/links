@@ -763,20 +763,6 @@ type delegated_chan = (chan * (t list))
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
 
-
-let rec typ : t -> Types.datatype = function
-  | `Bool _ -> Types.bool_type
-  | `Int _ -> Types.int_type
-  | `Float _ -> Types.float_type
-  | `Char _ -> Types.char_type
-  | `String _ -> Types.string_type
-  | `List [v] -> Types.make_list_type (typ v)
-  | `XML _ -> Types.xml_type
-  | `DateTime _ -> Types.datetime_type
-  | `Variant (_, v) -> Types.Variant (typ v)
-  | `Database _ -> Types.database_type
-  | _ -> failwith "value.ml; Not implemented this type in the checker."
-
 (** {1 Pretty-printing values} *)
 
 open Format
@@ -1176,3 +1162,26 @@ let row_columns_values v =
   (row_columns v, row_values v)
 
 
+  let rec typ : t -> Types.datatype = function
+  | `Bool _ -> Types.bool_type
+  | `Int _ -> Types.int_type
+  | `Float _ -> Types.float_type
+  | `Char _ -> Types.char_type
+  | `String _ -> Types.string_type
+  | `Entry (k, v) -> failwith "Entry"
+  | `Record fields -> 
+    let field_map = List.map (fun (k, v) -> (k, Types.Present (typ v))) fields |> Utility.StringMap.from_alist in
+    Types.make_record_type field_map
+  | `List [] -> Types.make_list_type (Types.empty_type)
+  | `List ((`XML _)::_ as elems) -> failwith "List of XML"
+  | `List [v] -> Types.make_list_type (Types.int_type)
+  | `ClientDomRef i -> failwith "ClientDomRef"
+  (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
+  | `Variant (_label, (`Record _ as value)) -> (typ value)
+  | `Variant (label, value) ->     
+    let row = Types.make_singleton_closed_row (label, Types.Present (typ value)) in
+    Types.Variant row
+  | `XML _ -> Types.xml_type
+  | `DateTime _ -> Types.datetime_type
+  | `Database _ -> Types.database_type
+  | _ -> failwith "value.ml; Not implemented this type in the checker."
