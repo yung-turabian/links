@@ -90,7 +90,7 @@ module Restriction = struct
     in
     if exists r then collect [] r else []
 
-    (** Computes the the minimum of two restricitons, if both are on the same level then get the more general. *)
+    (** Computes the the minimum of two restricitons *)
     let min r1 r2 =
       if r1 = r2 then Some r1
       else 
@@ -99,22 +99,7 @@ module Restriction = struct
         match is_r1_ancestor_of_r2, is_r2_ancestor_of_r1 with
         | true, false -> Some r2  (* r1 is more general than r2 *)
         | false, true -> Some r1  (* r2 is more general than r1 *)
-        | _ ->
-            (* Neither is ancestor of the other - find common ancestors *)
-            let ancestors_r1 = ancestors r1 in
-            let ancestors_r2 = ancestors r2 in
-            let common = List.filter (fun a -> List.mem a ancestors_r2) ancestors_r1 in
-            match common with
-            | [] -> None
-            | _ ->
-                List.fold_left (fun acc a ->
-                  match acc with
-                  | None -> Some a
-                  | Some current ->
-                      if List.mem a (ancestors current) then Some current
-                      else if List.mem current (ancestors a) then Some a
-                      else Some current
-                ) None common
+        | _ -> None
 
   let add ?(parents=["Any"]) name =
     if exists name then
@@ -161,10 +146,6 @@ module Restriction = struct
 
       assert (min "Any" "Session" = Some "Session");
       assert (min "Session" "Any" = Some "Session");
-
-      assert (min "Base" "Session" = Some "Mono");
-      assert (min "Session" "Base" = Some "Mono");
-      assert (min "Eff" "Session" = Some "Any")
 
 end
 
