@@ -1,3 +1,9 @@
+infixr 8 ^;
+infixl 6 +;
+infixl 6 `sub`;
+infixl 7 *;
+infixl 7 /;
+
 typename Nat = [|Zero|Succ:Nat|];
 
 # Mutually recursive functions
@@ -43,46 +49,48 @@ fun addNat(n1, n2) {
 		}
 }
 
-infixl 6 +;
-infixl 7 *;
+sig mulNat : (Nat, Nat) ~> Nat
+fun mulNat(n1, n2) {
+		switch (n1) {
+						case Zero -> n2
+						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
+		}
+}
 
-class Num : (a) {
+class Num : (a::Type(Unl, Any)) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
-		sig `minus` : (a, a) -> a;
-	#	sig - : (a, a) -> a;
+		sig `sub` : (a, a) -> a;
 		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
 		sig ^ : (a, a) -> a;
-		#sig `abs` : (a) -> a;
+		sig `abs` : (a) -> a;
 }
 
 
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
-		`minus` : subInt;
+		`sub` : (-);
 		/ : divInt;
 		`negate` : negInt;
 		^ : powInt;
-		#`abs` : fun (x) { if (x < 0) -x else x };
+		`abs`: fun(i) { if (i < 0) `negate` i else i };
 }
 
 instance Num : Float {
 		+ : addFloat;
 		* : mulFloat;
-		`minus` : subFloat;
+		`sub` : (-.);
 		/ : divFloat;
 		`negate` : negFloat;
 		^ : powFloat;
+		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
 }
 
-class UnsafeNum : (a) {
-		sig + : (a, a) ~> a;
-}
-
-instance UnsafeNum : Nat {
-		+ : addNat;
+#instance Num : Nat {
+#		+ : addNat;
 #		* : mulNat;
-#		`negate` : negNat;
-}
+#		`negate` : fun(n) { error("Attempted to negate a natural number.") };
+#}
+

@@ -77,7 +77,6 @@ module Restriction = struct
     (* Effect is a direct child of Any *)
     Hashtbl.add graph "Eff" ["Any"]
 
-  (* Check if a restriction exists *)
   let exists name = Hashtbl.mem graph name
 
   (* Get all ancestors (transitive closure of parents) *)
@@ -117,18 +116,19 @@ module Restriction = struct
                       else Some current
                 ) None common
 
-  (* Add a new restriction dynamically *)
   let add ?(parents=["Any"]) name =
     if exists name then
       Debug.if_set (show_subkindclasses)
         (fun () -> ("Restriction " ^ name ^ " already exists"))
     else if List.for_all exists parents then
-      Hashtbl.replace graph name parents
+      Hashtbl.add graph name parents
     else
       Debug.if_set (show_subkindclasses)
-        (fun () -> ("Some parent restrictions not found"))
+        (fun () -> ("Some parent restrictions not found: "));
 
-  (* Get all restrictions in topological order (most general first) *)
+      List.iter (fun r -> Debug.if_set (show_subkindclasses)
+        (fun () -> (r))) parents
+
   let all_restrictions () =
     let nodes = Hashtbl.fold (fun k _ acc -> k::acc) graph [] in
     let edges = 
@@ -137,7 +137,6 @@ module Restriction = struct
       ) graph [] in
     topological_sort nodes edges
 
-  (* Convert a restriction to its string representation *)
   let to_string r = r
 
    (* Visualization helper *)

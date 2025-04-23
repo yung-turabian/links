@@ -106,7 +106,7 @@ instance Num : Float {
 #		`negate` : fun(n) { error("Attempted to negate a natural number.") };
 #}
 
-class Show : (a) {
+class Show : (a::Type) {
 		sig `stringOf` : (a) -> String;
 }
 
@@ -126,12 +126,12 @@ instance Show : Char {
 		`stringOf` : fun (c) { implode(c :: []) };
 }
 
-class Ord : (a) {
-		sig `lt` : (a, a) -> Bool;
+class Eq : (a::Type) {
+		sig `eqs` : (a, a) -> Bool;
 }
 
-class Eq : (a::Ord) {
-		sig `eqs` : (a, a) -> Bool;
+class Ord : (a::Eq) {
+		sig `lt` : (a, a) -> Bool;
 }
 
 fun square(x) {

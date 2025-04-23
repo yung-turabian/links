@@ -687,14 +687,14 @@ object (o : 'self)
             let (tyvar_name, kind, fd) = SugarQuantifier.get_unresolved_exn q in
             match kind with
               | SugarKind.KResolved (pk, sk) ->
-
                 let class_subkind = (match pk, sk with
                 | _, None ->
                     Restriction.add ~parents:["Any"; "Mono"] name;
                     (lin_unl, name)
                 | _, Some (lin, rest) -> 
+                    let parents = make_parents (Some rest) in
                     (** TODO: adopt operations if they exist. *)
-                    Restriction.add ~parents:[rest] name;
+                    Restriction.add ~parents name;
                     (lin, name)
                 ) in
 
@@ -704,11 +704,9 @@ object (o : 'self)
                   (fun () -> Restriction.to_dot ());
 
                 let kind = SugarKind.mk_resolved pk (Some class_subkind) in
-
                 o, SugarQuantifier.mk_unresolved tyvar_name kind fd
 
               | SugarKind.KUnresolved (pk, (lin, res)) -> 
-
                 let parents = make_parents res in
                 Restriction.add ~parents name;
                 Debug.if_set (CommonTypes.show_subkindclasses)
@@ -717,7 +715,6 @@ object (o : 'self)
                   (fun () -> Restriction.to_dot () );
                 
                 let kind = SugarKind.mk_unresolved pk (lin, Some name) in
-                
                 let q = SugarQuantifier.mk_unresolved tyvar_name kind fd in
                 o, q
           ) qs

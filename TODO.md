@@ -3,6 +3,7 @@
 + A superclass should adopt all operations, if there are any
     + It will get all templates and implementations and when a new instance is created for subclass, add those functions
 
++ Not defining a pk or sk will fuck up the constraint check
 
 ## Future plans
 
