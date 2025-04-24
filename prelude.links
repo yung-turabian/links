@@ -15,6 +15,7 @@ infixl 6 +;
 infixl 6 `sub`;
 infixl 7 *;
 infixl 7 /;
+infixl 6 `negate`;
 
 typename Nat = [|Zero|Succ:Nat|];
 
@@ -134,6 +135,15 @@ class Ord : (a::Eq) {
 		sig `lt` : (a, a) -> Bool;
 }
 
+class Additive : (a::Num) {
+		sig `nonNegAdd` : (a, a) -> a;
+}
+
+instance Additive : Int {
+		`nonNegAdd` : fun (x, y) { if ((x + y) < 0) error("Not a negative number.") else (x + y) };
+}
+
+sig square : (a::Additive) -> a
 fun square(x) {
 		x * x
 }

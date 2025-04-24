@@ -546,7 +546,9 @@ object (self)
       let (dt', typ) = Desugar.datatype' alias_env dt in
       let () =
         match typ with
-        | Some t -> Types.DynamicConstraint.update class_name t;
+        | Some t -> 
+                Debug.print (Types.string_of_datatype t);
+                Types.DynamicConstraint.update class_name t;
         | None -> ()
       in
 
