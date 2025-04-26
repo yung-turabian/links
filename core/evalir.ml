@@ -21,7 +21,7 @@ let allow_static_routes = ref true
 
 module SubkindTable = struct
   (* This would track all implementations of subkind class functions *)
-  let implementations = Hashtbl.create 30
+  let implementations = Hashtbl.create 50
   
   let add_impl name arg_type impl_var =
     Hashtbl.add implementations (name, arg_type) impl_var

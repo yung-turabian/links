@@ -71,3 +71,4 @@ val type_application_kind_mismatch : Position.t -> string -> int -> string -> st
 val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn
 val unbound_tycon : Position.t -> string -> exn
 val unbound_subkind : Position.t -> string -> exn
+val unbound_subkind_instance : Position.t -> string -> string -> exn

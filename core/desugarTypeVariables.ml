@@ -667,6 +667,7 @@ object (o : 'self)
       let make_parents rest = 
         match rest with
         | Some r -> 
+          (* This might not be the right thing to do *)
           if r = "Any" || r = "Mono" then
             ["Any"; "Mono"] 
           else
@@ -784,6 +785,9 @@ object (o : 'self)
         with NotFound _ -> raise (internal_error ("Subkind class not found: " ^ class_name))
       in
       
+      let o = o#set_allow_implictly_bound_vars false in
+      (* Aliases must never use type variables from an outer scope *)
+      let o = o#reset_vars in
       (* Process the class *)
       let o, resolved_qs, fun' = o#quantified 
         ~rigidify:false class_info.quantifiers (fun o' -> 
@@ -793,6 +797,8 @@ object (o : 'self)
 
           o', (b, dt)) 
       in
+
+      let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
 
       let subkind_env = 
         (** HACK: we are going to take for granted that signature quantifiers will

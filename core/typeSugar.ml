@@ -5327,10 +5327,29 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Instance (class_name, dt, instances) ->
           (** TODO: Check body type matches Instance type *)
 
-          let _pk, _sk, _qs, _funs = match lookup_subkind context class_name with
+          let _pk, _sk, _qs, funs = match lookup_subkind context class_name with
             | Some ( (pk, sk), qs, methods ) -> 
                 pk, sk, qs, methods
             | None   ->  failwith ("Class not found: " ^ class_name)
+          in
+
+          let () =
+            let req_ops = 
+              let list = Utility.StringMap.to_alist funs in
+              List.sort String.compare (List.map fst list)
+            in
+
+            let new_ops =
+              List.sort String.compare (List.map fst instances)
+            in
+            
+            if List.equal (String.equal) req_ops new_ops then
+              ()
+            else
+              List.iter ( fun op -> 
+                  if not (List.mem op new_ops) then
+                    raise (Errors.unbound_subkind_instance pos class_name op)
+                ) req_ops
           in
 
           let datatype =
@@ -5350,9 +5369,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let instances =
             List.fold_right
               (fun (pat, (_qs, _tyargs, body)) bindings ->
-                (*let pat = tpc pat in
-                  let penv = pattern_env pat in*)
-
                 let map = lookup_subkind_map context class_name in
                 let dt' = StringMap.find pat map in
                 let dt' = Instantiate.freshen_quantifiers dt' in
@@ -5389,7 +5405,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                     let ((tyvars, _args), _bt) = Generalise.generalise context.var_env bt in
                     tyvars(*, pat, penv*)
                   else
-                    failwith "bad choice"
+                    failwith "An instance body must be generalisable."
                     (*(* All rigid type variables in bt should appear in the
                       environment *)
                     let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
@@ -5414,48 +5430,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
         (Instance (class_name, dt, instances)
                 , empty_context, Usage.empty)
-      (** [subkind_binding] case for Subkind Classes *)
-      (*| Class {class_binder; class_tyvar; class_methods} ->
-
-          let class_methods =
-            List.map (fun (bndr, dt') ->
-              let dt, datatype =
-                match dt' with
-                | (dt, Some datatype) -> (dt, datatype)
-                | _ -> assert false
-              in
-              let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-              let datatype = Instantiate.freshen_quantifiers datatype in
-              let bndr = Binder.set_type bndr datatype in
-              (bndr, dt')
-            ) class_methods in
-        
-          let env = (fun env (class_binder, class_tyvar, class_methods) ->
-            let name = Binder.to_name class_binder in
-            let qs = List.map SugarQuantifier.get_resolved_exn class_tyvar in  
-            let kinds = List.map (Quantifier.to_primary_kind) qs in
-            let pk_naive = List.hd kinds in
-            let method_binders = List.map fst class_methods in
-            let methods_name = List.map Binder.to_name method_binders in
-
-            
-            (* Defaults to restriciton of its own name *)
-            let ctx = bind_subkind env (name, `Class ((pk_naive, (lin_any, name)), qs, methods_name))
-            in
-            List.fold_left (fun env (bndr, dt') ->
-              let dt, datatype =
-                match dt' with
-                | (dt, Some datatype) -> (dt, datatype)
-                | _ -> assert false
-              in
-
-              bind_var env (Binder.to_name bndr, datatype)
-            ) ctx class_methods
-            
-
-          ) empty_context (class_binder, class_tyvar, class_methods) in
-          
-          (Class {class_binder; class_tyvar; class_methods}, env, Usage.empty)*)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in

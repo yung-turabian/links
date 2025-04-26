@@ -789,7 +789,6 @@ end
 
 (** Used in conjunction with the new subkind classes. *)
 module DynamicConstraint = struct
-
   let type_patterns : (string, typ list) Hashtbl.t = Hashtbl.create 16
 
   let create name =
@@ -809,8 +808,6 @@ module DynamicConstraint = struct
             | Not_typed -> assert false
             | Var _ | Recursive _ | Closed ->
               failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-            | (Application _ | RecursiveApplication _) -> false
-            | Meta _ as t  -> super#type_satisfies vars t
             | _  -> false
         end
       end 
@@ -825,18 +822,14 @@ module DynamicConstraint = struct
       let c = ConstraintEnv.find name in
       match c with
       | Some _ ->
-        let existing =
-          match Hashtbl.find_opt type_patterns name with
-          | Some ts -> ts
-          | None -> []
+        let existing = Hashtbl.find_opt type_patterns name 
+                       |> Option.value ~default:[] 
         in
         Hashtbl.replace type_patterns name (typ :: existing);
 
         let known_typs = typ :: existing in
 
         let module Instance = struct
-          open Restriction
-          open Primitive
           let name = name
     
           module Predicate = struct

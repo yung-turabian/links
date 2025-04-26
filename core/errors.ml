@@ -40,6 +40,7 @@ exception DesugaringError of
   { pos: Position.t; stage: sugar_error_stage; message: string }
 exception UnboundTyCon of (Position.t * string)
 exception UnboundSubkind of (Position.t * string)
+exception UnboundSubkindInstance of (Position.t * string * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
@@ -105,6 +106,10 @@ let format_exception =
       let pos, _ = Position.resolve_start_expr pos in
       pos_prefix ~pos
         (Printf.sprintf "Unbound subkind %s\n" subkind)
+  | UnboundSubkindInstance (pos, subkind, missing_op) ->
+    let pos, _ = Position.resolve_start_expr pos in
+    pos_prefix ~pos
+      (Printf.sprintf "No impelmentation of operator `%s` provided for instance an of %s\n" missing_op subkind)
   | RuntimeError s -> pos_prefix ("Runtime error: " ^ s)
   | Position.ASTSyntaxError (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
@@ -264,3 +269,4 @@ let type_application_global_kind_mismatch pos name expected provided =
     TypeApplicationGlobalKindMismatch { pos; name; expected; provided }
 let unbound_tycon pos message = UnboundTyCon (pos, message)
 let unbound_subkind pos message = UnboundSubkind (pos, message)
+let unbound_subkind_instance pos sk op = UnboundSubkindInstance (pos, sk, op)

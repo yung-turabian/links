@@ -63,26 +63,25 @@ module Restriction = struct
   type t = string
   [@@deriving eq,show]
 
-  let graph : (t, t list) Hashtbl.t = Hashtbl.create 20
+  let restrictions : (t, t list) Hashtbl.t = Hashtbl.create 20
 
   (* Default restrictions *)
   let () =
     (* Any is the most general restriction *)
-    Hashtbl.add graph "Any" [];
+    Hashtbl.add restrictions "Any" [];
     (* Mono is a child of Any *)
-    Hashtbl.add graph "Mono" ["Any"];
+    Hashtbl.add restrictions "Mono" ["Any"];
     (* Base and Session are children of Mono *)
-    Hashtbl.add graph "Base" ["Mono"; "Any"];
-    Hashtbl.add graph "Session" ["Mono"; "Any"];
+    Hashtbl.add restrictions "Base" ["Mono"; "Any"];
+    Hashtbl.add restrictions "Session" ["Mono"; "Any"];
     (* Effect is a direct child of Any *)
-    Hashtbl.add graph "Eff" ["Any"]
+    Hashtbl.add restrictions "Eff" ["Any"]
 
-  let exists name = Hashtbl.mem graph name
+  let exists name = Hashtbl.mem restrictions name
 
-  (* Get all ancestors (transitive closure of parents) *)
   let ancestors r =
     let rec collect acc current =
-      let direct_parents = try Hashtbl.find graph current with Not_found -> [] in
+      let direct_parents = try Hashtbl.find restrictions current with Not_found -> [] in
       List.fold_left (fun acc parent ->
         if List.mem parent acc then acc
         else collect (parent::acc) parent
@@ -90,15 +89,14 @@ module Restriction = struct
     in
     if exists r then collect [] r else []
 
-    (** Computes the the minimum of two restricitons *)
     let min r1 r2 =
-      if r1 = r2 then Some r1
+      if r1 = r2 then Some r1 (* All restrictions will min to themselves *)
       else 
         let is_r1_ancestor_of_r2 = List.mem r1 (ancestors r2) in
         let is_r2_ancestor_of_r1 = List.mem r2 (ancestors r1) in
         match is_r1_ancestor_of_r2, is_r2_ancestor_of_r1 with
-        | true, false -> Some r2  (* r1 is more general than r2 *)
-        | false, true -> Some r1  (* r2 is more general than r1 *)
+        | true, false -> Some r2 
+        | false, true -> Some r1
         | _ -> None
 
   let add ?(parents=["Any"]) name =
@@ -106,7 +104,7 @@ module Restriction = struct
       Debug.if_set (show_subkindclasses)
         (fun () -> ("Restriction " ^ name ^ " already exists"))
     else if List.for_all exists parents then
-      Hashtbl.add graph name parents
+      Hashtbl.add restrictions name parents
     else
       Debug.if_set (show_subkindclasses)
         (fun () -> ("Some parent restrictions not found: "));
@@ -114,26 +112,17 @@ module Restriction = struct
       List.iter (fun r -> Debug.if_set (show_subkindclasses)
         (fun () -> (r))) parents
 
-  let all_restrictions () =
-    let nodes = Hashtbl.fold (fun k _ acc -> k::acc) graph [] in
-    let edges = 
-      Hashtbl.fold (fun child parents acc ->
-        List.map (fun parent -> (child, parent)) parents @ acc
-      ) graph [] in
-    topological_sort nodes edges
-
   let to_string r = r
 
-   (* Visualization helper *)
    let to_dot () =
     let buf = Buffer.create 256 in
-    Buffer.add_string buf "digraph Restrictions {\n";
+    Buffer.add_string buf "direstrictions Restrictions {\n";
     Buffer.add_string buf "  rankdir=BT;\n";  (* Bottom-to-top ranking *)
     Hashtbl.iter (fun child parents ->
       List.iter (fun parent ->
         Buffer.add_string buf (Printf.sprintf "  \"%s\" <: \"%s\";\n" child parent))
         parents
-    ) graph;
+    ) restrictions;
     Buffer.add_string buf "}\n";
     Buffer.contents buf
 

@@ -1,5 +1,7 @@
 # TODO
 
++ To be allowed to have subclass use superclass functions, update parent constraints can_type_be in Constraint mod.
+
 + A superclass should adopt all operations, if there are any
     + It will get all templates and implementations and when a new instance is created for subclass, add those functions
 

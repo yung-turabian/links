@@ -1,0 +1,8 @@
+
+
+sig dum : (a::Num, b) -> b
+fun dum (x, y) {
+		y
+}
+
+dum(2,3.4)

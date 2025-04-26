@@ -1,4 +1,4 @@
-#open import Num;
+# open import Num;
 
 infixr 5 ++;
 
@@ -62,14 +62,6 @@ fun addNat(n1, n2) {
 		}
 }
 
-sig mulNat : (Nat, Nat) ~> Nat
-fun mulNat(n1, n2) {
-		switch (n1) {
-						case Zero -> n2
-						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
-		}
-}
-
 class Num : (a::Type(Unl, Any)) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
@@ -101,12 +93,6 @@ instance Num : Float {
 		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
 }
 
-#instance Num : Nat {
-#		+ : addNat;
-#		* : mulNat;
-#		`negate` : fun(n) { error("Attempted to negate a natural number.") };
-#}
-
 class Show : (a::Type) {
 		sig `stringOf` : (a) -> String;
 }
@@ -127,23 +113,47 @@ instance Show : Char {
 		`stringOf` : fun (c) { implode(c :: []) };
 }
 
+sig eqInt : (Int, Int) -> Bool 
+fun eqInt(x, y) {
+		if (x == y) true
+		else false
+}
+
+sig ltInt : (Int, Int) -> Bool 
+fun ltInt(x, y) {
+		if (x < y) true
+		else false
+}
+
 class Eq : (a::Type) {
-		sig `eqs` : (a, a) -> Bool;
+		sig `eq` : (a, a) -> Bool;
+}
+
+instance Eq : Int {
+		`eq` : eqInt; 
 }
 
 class Ord : (a::Eq) {
-		sig `lt` : (a, a) -> Bool;
+		sig `lteq` : (a, a) -> Bool;
 }
 
-class Additive : (a::Num) {
-		sig `nonNegAdd` : (a, a) -> a;
+instance Ord : Int {
+		`lteq` : fun(x, y) { if (x `eq` y || ltInt(x,y)) true else false};
 }
 
-instance Additive : Int {
-		`nonNegAdd` : fun (x, y) { if ((x + y) < 0) error("Not a negative number.") else (x + y) };
+sig compare_adjacent : ([a::Ord], (a::Ord, a::Ord) ~b~> Bool) ~b~> Bool
+fun compare_adjacent(l, cmp) {
+    switch(l) {
+        case [] -> true
+				case [_] -> true
+        case x::y::rest -> cmp(x, y) && compare_adjacent(y::rest, cmp)
+    }
 }
 
-sig square : (a::Additive) -> a
+fun all_equal(l) { compare_adjacent(l, (`eq`)) }
+fun is_non_decreasing(l) { compare_adjacent(l, (`lteq`)) }
+
+sig square : (%a) -> %a
 fun square(x) {
 		x * x
 }
@@ -396,6 +406,20 @@ fun reverse(l) {
   aux(l, [])
 }
 
+sig palindrome : ([%a::Ord]) ~> Bool 
+fun palindrome(l) {
+		var rev = reverse(l);
+
+		sig aux : ([%a], [%a]) ~> Bool
+		fun aux(l, rev) {
+				switch((l, rev)) {
+						case ([], []) -> true
+						case (x::xs, y::ys) -> 
+								x `eq` y && aux(xs, ys)
+				}
+		}
+		aux(l, rev)
+}
 
 fun concat(list) {
   switch (list) {
