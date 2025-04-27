@@ -787,9 +787,16 @@ module ConstraintEnv = struct
     | None -> failwith ("Constraint " ^ name ^ " not found")
 end
 
+
 (** Used in conjunction with the new subkind classes. *)
 module DynamicConstraint = struct
-  let type_patterns : (string, typ list) Hashtbl.t = Hashtbl.create 16
+    module TypSet = Set.Make(struct
+        type t = typ
+            [@@deriving show]
+        let compare = compare
+    end)
+
+  let type_patterns : (string, TypSet.t) Hashtbl.t = Hashtbl.create 16
 
   let create name =
     let module Instance = struct
@@ -804,7 +811,7 @@ module DynamicConstraint = struct
             | Recursive _ -> false
             | _ -> super#point_satisfies f vars point
   
-          method! type_satisfies vars = function
+          method! type_satisfies _vars = function
             | Not_typed -> assert false
             | Var _ | Recursive _ | Closed ->
               failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
@@ -819,15 +826,13 @@ module DynamicConstraint = struct
     ConstraintEnv.register name (module Instance : Constraint)
 
     let update name typ =
-      let c = ConstraintEnv.find name in
-      match c with
+      match ConstraintEnv.find name with
       | Some _ ->
         let existing = Hashtbl.find_opt type_patterns name 
-                       |> Option.value ~default:[] 
+                       |> Option.value ~default:TypSet.empty
         in
-        Hashtbl.replace type_patterns name (typ :: existing);
-
-        let known_typs = typ :: existing in
+        let known_typs = TypSet.add typ existing in
+        Hashtbl.replace type_patterns name known_typs;
 
         let module Instance = struct
           let name = name
@@ -845,13 +850,19 @@ module DynamicConstraint = struct
                 | Not_typed -> assert false
                 | Var _ | Recursive _ | Closed ->
                   failwith "[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)"
-                | Meta _ as t -> super#type_satisfies vars t
-                | t -> List.exists (fun known -> known = t) known_typs
+                | (Alias _ | Meta _) as t  -> super#type_satisfies vars t
+                | (Record _ | Variant _) as t -> super#type_satisfies vars t
+                | ForAll ([], t) -> super#type_satisfies vars t
+                | Row _ as t -> super#type_satisfies vars t
+                | Absent -> true
+                | Present t -> if TypSet.mem t known_typs then super#type_satisfies vars t else false
+                | t -> TypSet.mem t known_typs
             end
           end
     
           let type_satisfies, row_satisfies = make_restriction_predicate (module Predicate) name false
           let can_type_be, can_row_be = make_restriction_predicate (module Predicate) name true
+
           let make_type, make_row = make_restriction_transform name
         end in
         ConstraintEnv.register ~replace:true name (module Instance : Constraint)
@@ -2012,7 +2023,7 @@ struct
     | Lolli (f, m, t) ->
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Record row
-      | Variant row -> free_bound_row_type_vars bound_vars row
+    | Variant row -> free_bound_row_type_vars bound_vars row
     | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
     | Lens _ -> []
     | ForAll (tyvars, body) ->

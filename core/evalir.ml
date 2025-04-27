@@ -280,7 +280,8 @@ struct
       let parameter_types = arg_types ~overstep_quantifiers:false ft in*)
 
       let argtypes = List.map Value.typ args in
-      let impl_var = 
+      List.iter (fun t -> Debug.print (Types.string_of_datatype t)) argtypes;
+      let impl_var =
         try SubkindTable.find_impl name argtypes
         with NotFound _ ->
           eval_error "Uncaught subkind class function %s." name
@@ -596,21 +597,56 @@ struct
             let var = Var.var_of_binder b in
             let name = Var.name_of_binder b in
             let scope = Var.scope_of_binder b in
-
-            (*List.iter (fun (arg_types, impl_var) ->
-              SubkindTable.add_impl name arg_types impl_var
-            ) cfun_impls;*)
             computation (Value.Env.bind var (`SubkindClassFunction name, scope) env) cont (bs, tailcomp)
         | CInst (b, (op, _, tc)) ->
           let var = Var.var_of_binder b in
           let typ = Var.type_of_binder b in
-          let argtype = TypeUtils.arg_types typ in
+          let argtypes = TypeUtils.arg_types typ in
+          let expanded_argtypes = 
+            argtypes |> List.map (fun t ->
+              match Types.concrete_type' t with
+              | Types.Variant row | Types.Select row | Types.Choice row ->
+                  let (fields, _, _) = Types.extract_row_parts (Types.flatten_row row) in
+                  (* For each variant case, create a function registration *)
+                  Utility.StringMap.fold (fun label field_spec acc ->
+                    match field_spec with
+                    | Types.Present typ ->
+                        (* Create a new variant type with just this one case *)
+                        let singleton_variant =
+                          Types.Variant (Types.Row (
+                            Utility.StringMap.singleton label (Types.Present typ),
+                            Types.closed_row_var,
+                            false
+                          ))
+                        in
+                        singleton_variant :: acc
+                    | _ -> acc
+                  ) fields []
+              | t -> [t]
+            )
+          in
+          
+          let rec product = function
+            | [] -> [[]]
+            | xs :: xss ->
+                let ys = product xss in
+                List.concat (List.map (fun x -> List.map (fun y -> x :: y) ys) xs)
+          in
+          
+          let all_combinations = product expanded_argtypes in
+          
+          List.iter (fun argtypes ->
+            Debug.print ("Registering instance for types: " ^ 
+                        String.concat ", " (List.map Types.string_of_datatype argtypes));
+            SubkindTable.add_impl op argtypes var
+          ) all_combinations;
+            
           let locals = Value.Env.localise env var in
           let cont' =
             K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
                frame &> cont)
           in
-          SubkindTable.add_impl op argtype var;
+
           tail_computation env cont' tc
         | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function

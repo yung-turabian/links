@@ -675,16 +675,17 @@ object (o : 'self)
         | None -> ["Any"; "Mono"]
       in
 
-      let o, unresolved_qs = 
+      let o, unresolved_qs, shared_kind = 
         match qs with
         | [] -> 
             Restriction.add ~parents:["Any"; "Mono"] name;
             Debug.if_set (CommonTypes.show_subkindclasses)
               (fun () -> ("New restriction: " ^ name));
             
-            o, []
+            let kind = (None, (Some lin_unl, Some name)) in
+            o, [], kind 
         | _ ->
-          o#list (fun o q ->
+          let o, unresolved_qs = o#list (fun o q ->
             let (tyvar_name, kind, fd) = SugarQuantifier.get_unresolved_exn q in
             match kind with
               | SugarKind.KResolved (pk, sk) ->
@@ -694,7 +695,6 @@ object (o : 'self)
                     (lin_unl, name)
                 | _, Some (lin, rest) -> 
                     let parents = make_parents (Some rest) in
-                    (** TODO: adopt operations if they exist. *)
                     Restriction.add ~parents name;
                     (lin, name)
                 ) in
@@ -706,7 +706,6 @@ object (o : 'self)
 
                 let kind = SugarKind.mk_resolved pk (Some class_subkind) in
                 o, SugarQuantifier.mk_unresolved tyvar_name kind fd
-
               | SugarKind.KUnresolved (pk, (lin, res)) -> 
                 let parents = make_parents res in
                 Restriction.add ~parents name;
@@ -719,45 +718,48 @@ object (o : 'self)
                 let q = SugarQuantifier.mk_unresolved tyvar_name kind fd in
                 o, q
           ) qs
+          in
+          
+          (* Determine shared primary kind, if any *)
+          let shared_kind = 
+            let sugar_kinds = List.map (fun q -> SugarQuantifier.get_unresolved_kind_exn q) unresolved_qs in
+            let pks = List.map (fun k -> SugarKind.get_unresolved_pk_exn k) sugar_kinds in
+            let sks = List.map (fun k -> SugarKind.get_unresolved_sk_exn k) sugar_kinds in
+
+            let pk = 
+              if pks <> [] then
+                match ListUtils.find_fstdiff pks with
+                | Some _ -> 
+                    None
+                | None -> 
+                    (List.hd pks)
+              else
+                None
+            in
+
+            let sk = 
+              if sks <> [] then
+                match ListUtils.find_fstdiff sks with
+                | Some _ -> 
+                  (Some lin_any, Some name)
+                | None -> 
+                  (List.hd sks)
+              else
+                (Some lin_unl, Some name)
+            in
+
+            pk, sk
+        in
+        o, unresolved_qs, shared_kind
+
       in
     
-      (* Determine shared primary kind, if any *)
-      let def_kind = 
-          let sugar_kinds = List.map (fun q -> SugarQuantifier.get_unresolved_kind_exn q) unresolved_qs in
-          let pks = List.map (fun k -> SugarKind.get_unresolved_pk_exn k) sugar_kinds in
-          let sks = List.map (fun k -> SugarKind.get_unresolved_sk_exn k) sugar_kinds in
-
-          let pk = 
-            if pks <> [] then
-              match ListUtils.find_fstdiff pks with
-              | Some _ -> 
-                  None
-              | None -> 
-                  (List.hd pks)
-            else
-              None
-          in
-
-          let sk = 
-            if sks <> [] then
-              match ListUtils.find_fstdiff sks with
-              | Some _ -> 
-                (Some lin_any, Some name)
-              | None -> 
-                (List.hd sks)
-            else
-              (Some lin_unl, Some name)
-          in
-
-          pk, sk
-      in
-
       (* Add all class declaration to the subkind
        * environment, as mutuals. *)
       let pk, sk, subkind_env = 
-        let (pk, _) = def_kind in
+        let (pk, _) = shared_kind in
         let sk = 
-          match def_kind with
+          match shared_kind with
           | _, (Some l, Some r) -> (l, r)
           | _, _ -> (lin_unl, name)
         in

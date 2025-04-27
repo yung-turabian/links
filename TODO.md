@@ -9,6 +9,8 @@
 
 ## Future plans
 
++ Deriving system, where Links will figure out an instance for say Show or Eq
+
 + SO YOU CAN USE MINUS, when parsing operators should be of Section.Name (or Section.Minus) instead read as strings.
     + Has to be reworked how minus is interpreted
 

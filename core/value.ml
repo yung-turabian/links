@@ -1173,14 +1173,13 @@ let row_columns_values v =
     let field_map = List.map (fun (k, v) -> (k, Types.Present (typ v))) fields |> Utility.StringMap.from_alist in
     Types.make_record_type field_map
   | `List [] -> Types.make_list_type (Types.empty_type)
-  | `List ((`XML _)::_ as elems) -> failwith "List of XML"
-  | `List [v] -> Types.make_list_type (Types.int_type)
+  | `List [v] -> Types.make_list_type (typ v)
   | `ClientDomRef i -> failwith "ClientDomRef"
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
   | `Variant (_label, (`Record _ as value)) -> (typ value)
-  | `Variant (label, value) ->     
-    let row = Types.make_singleton_closed_row (label, Types.Present (typ value)) in
-    Types.Variant row
+  | `Variant (label, value) -> 
+    let field_map = Utility.StringMap.singleton label (Types.Present (typ value)) in
+    Types.Variant (Types.Row (field_map, Types.closed_row_var, false))
   | `XML _ -> Types.xml_type
   | `DateTime _ -> Types.datetime_type
   | `Database _ -> Types.database_type

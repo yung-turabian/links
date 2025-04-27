@@ -1,1 +1,25 @@
-typename Temperature = [|C:Float|F:Float|];
+typename Temperature = [|Cel:Float|Far:Float|];
+# @deriving show
+
+sig checkTempEquality : (Temperature, Temperature) -> Bool
+fun checkTempEquality(x, y) {
+    switch ((x,y)) {
+            case (Cel(m), Cel(n)) -> m == n
+            case (Far(m), Far(n)) -> m == n
+            case (Cel(c), Far(f)) -> (1.8 * c + 32.0) == f
+            case (Far(f), Cel(c)) -> (1.8 * c + 32.0) == f
+    }
+}
+
+instance Eq : Temperature {
+    `eq` : checkTempEquality;
+}
+
+typename Pair(a, b) = (a, b);
+
+sig pairEq : (Pair(a,b), Pair(a,b)) -> Bool
+fun pairEq(p1, p2) {
+    p1 == p2
+}
+
+Cel(10.0) `eq` Far(50.0)

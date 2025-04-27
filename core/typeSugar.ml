@@ -5377,6 +5377,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 let body = tc body in
                 let bt = 
                   unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos dt');
+                  dt'
+                in
+
+                (*let bt = 
+                  unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos dt');
 
                   (*let env' = empty_context in
                   let env' = bind_var env' (pat, dt') in
@@ -5388,12 +5393,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                   (*let instantiated = Instantiate.apply_type dt' args in
                   Debug.print ("DDDD" ^ Types.string_of_datatype instantiated);*)
                   dt'
-                in
-
-                (*
-                let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in*)
-
-                (*Types.Mono.make_type (pattern_typ pat);*)
+                in*)
 
                 let _usage = usages body in
                 let body = erase body in
