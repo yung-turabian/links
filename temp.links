@@ -15,11 +15,4 @@ instance Eq : Temperature {
     `eq` : checkTempEquality;
 }
 
-typename Pair(a, b) = (a, b);
-
-sig pairEq : (Pair(a,b), Pair(a,b)) -> Bool
-fun pairEq(p1, p2) {
-    p1 == p2
-}
-
 Cel(10.0) `eq` Far(50.0)
