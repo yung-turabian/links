@@ -2,7 +2,6 @@
    (Sugartypes) and typechecker (Types). *)
 
 open Utility
-open Graph
 
 let show_subkindclasses
   = Settings.(flag "show_subkindclasses"

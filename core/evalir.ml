@@ -281,11 +281,28 @@ struct
 
       let argtypes = List.map Value.typ args in
       List.iter (fun t -> Debug.print (Types.string_of_datatype t)) argtypes;
+
       let impl_var =
         try SubkindTable.find_impl name argtypes
         with NotFound _ ->
-          eval_error "Uncaught subkind class function %s." name
+          let gen_list_argtypes = 
+            argtypes |> List.map (fun t ->
+              match t with
+              | Types.Application (l, _) -> 
+                if (Types.Abstype.name l) = "List" then
+                  Types.make_list_type (Types.fresh_rigid_type_variable default_subkind)
+                  (** HACK: should set actual subkind but this whole evalir nonsense is hacky to begin with,
+                      Not going to work because is not the 'same' type variable, this should be resolved elsewhere *)
+                else t
+              | t -> t
+            )
+          in
+          List.iter (fun t -> Debug.print ("Looking for: " ^ (Types.string_of_datatype t))) gen_list_argtypes;
+          try SubkindTable.find_impl name gen_list_argtypes
+          with NotFound _ ->
+            eval_error "Uncaught subkind class function %s." name
       in
+
       value env (Variable impl_var) >>= fun impl ->
       apply cont env (impl, args)
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->

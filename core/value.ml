@@ -1161,7 +1161,6 @@ let row_columns_values v =
   in
   (row_columns v, row_values v)
 
-
   let rec typ : t -> Types.datatype = function
   | `Bool _ -> Types.bool_type
   | `Int _ -> Types.int_type
@@ -1174,6 +1173,9 @@ let row_columns_values v =
     Types.make_record_type field_map
   | `List [] -> Types.make_list_type (Types.empty_type)
   | `List [v] -> Types.make_list_type (typ v)
+  | `List l -> 
+    (* Already caught malformed lists *)
+    Types.make_list_type (typ (List.hd l))
   | `ClientDomRef i -> failwith "ClientDomRef"
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
   | `Variant (_label, (`Record _ as value)) -> (typ value)

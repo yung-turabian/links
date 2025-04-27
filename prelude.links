@@ -21,31 +21,43 @@ class Num : (a::Type(Unl, Any)) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
 		sig `sub` : (a, a) -> a;
-		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
 		sig ^ : (a, a) -> a;
 		sig `abs` : (a) -> a;
+        sig `fromInteger` : (Int) -> a;
 }
 
 
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
-		`sub` : (-);
-		/ : divInt;
+		`sub` : (-); # Hacky, should be proper
 		`negate` : negInt;
 		^ : powInt;
 		`abs`: fun(i) { if (i < 0) `negate` i else i };
+        `fromInteger` : fun(i) { i };
 }
 
 instance Num : Float {
 		+ : addFloat;
 		* : mulFloat;
 		`sub` : (-.);
-		/ : divFloat;
 		`negate` : negFloat;
 		^ : powFloat;
 		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
+        `fromInteger` : intToFloat;
+}
+
+class Fractional : (a::Type(Unl, Num)) {
+    sig / : (a, a) -> a;
+}
+
+instance Fractional : Int {
+    / : divInt;
+}
+
+instance Fractional : Float {
+    / : divFloat;
 }
 
 class Show : (a::Type) {

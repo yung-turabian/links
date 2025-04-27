@@ -4,10 +4,11 @@
 
 + A superclass should adopt all operations, if there are any
     + It will get all templates and implementations and when a new instance is created for subclass, add those functions
-
-+ Not defining a pk or sk will fuck up the constraint check
+    + This might have been solved
 
 ## Future plans
+
++ Fix how multi type variables are handled, works but is pretty broken 
 
 + Deriving system, where Links will figure out an instance for say Show or Eq
 
