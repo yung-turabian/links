@@ -1,0 +1,29 @@
+class PrintfType : (r::Type) {
+    sig `sprintf` : (String, [String]) ~> [r];
+}
+
+instance PrintfType : String {
+    `sprintf` : 
+        fun(fmt, args) {
+            var fmtExpl = explode(fmt);
+            
+            fun aux(fmt, args) {
+                switch((fmt, args)) {
+                    case ([], _) -> []
+                    #case (('%'::'s'::cs), a::as) -> a ++ aux(cs, as)
+                    #case ((c::cs), as) -> c::(aux(cs, as))
+                    case (_, []) -> error("Not enough arguments!")
+                }
+            }
+
+            aux(fmtExpl, args)
+        };
+}
+
+
+sig printf : (String) ~> [r::PrintfType]
+fun printf (fmt) {
+    fmt `sprintf` []
+}
+
+printf("Hello %s")

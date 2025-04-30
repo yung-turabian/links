@@ -98,6 +98,12 @@ fun ltInt(x, y) {
 		else false
 }
 
+sig ltFloat : (Float, Float) -> Bool 
+fun ltFloat(x, y) {
+		if (x < y) true
+		else false
+}
+
 class Eq : (a::Type) {
 		sig `eq` : (a, a) -> Bool;
 }
@@ -107,18 +113,25 @@ instance Eq : Int {
 }
 
 instance Eq : Float {
-		`eq` : eqFloat; 
+        `eq` : eqFloat;
 }
 
-class Ord : (a::Eq) {
+class Ord : (a::Type(Unl, Eq)) {
 		sig `lteq` : (a, a) -> Bool;
 }
 
 instance Ord : Int {
+        # We would like this to be accepted 
+        # `lteq` : sig f : (Int, Int) -> Bool fun f(x, y) { if (x `eq` y || x < y) true else false};
 		`lteq` : fun(x, y) { if (x `eq` y || ltInt(x,y)) true else false};
 }
 
-sig compare_adjacent : ([a::Ord], (a::Ord, a::Ord) ~b~> Bool) ~b~> Bool
+instance Ord : Float {
+	`lteq` : fun(x, y) { if (x `eq` y || ltFloat(x,y)) 
+        true else false};
+}
+
+#sig compare_adjacent : ([a::Ord], (a::Ord, a::Ord) ~b~> Bool) ~b~> Bool
 fun compare_adjacent(l, cmp) {
     switch(l) {
         case [] -> true

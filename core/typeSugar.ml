@@ -5368,7 +5368,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
           let instances =
             List.fold_right
-              (fun (pat, (_qs, _tyargs, body)) bindings ->
+              (fun (pat, (qs, _tyargs, body)) bindings ->
                 let map = lookup_subkind_map context class_name in
                 let dt' = StringMap.find pat map in
                 let dt' = Instantiate.freshen_quantifiers dt' in
@@ -5405,28 +5405,18 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                     let ((tyvars, _args), _bt) = Generalise.generalise context.var_env bt in
                     tyvars(*, pat, penv*)
                   else
-                    failwith "An instance body must be generalisable."
-                    (*(* All rigid type variables in bt should appear in the
+                    (* All rigid type variables in bt should appear in the
                       environment *)
                     let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
                     match tyvars with
-                    | [] -> [], erase_pat pat, penv
-                    | _ -> Gripers.value_restriction pos bt*)
+                    | _ -> Gripers.value_restriction pos bt
                 in
 
                 let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
                     
-                (pat, (sugar_tyvars, tyargs, body)) :: bindings)
+                (pat, (qs, tyargs, body)) :: bindings)
                 instances []
           in
-
-          (*let env = (fun env  ->
-              bind_subkind env (
-                class_name, `Class ((pk, sk), qs, [])
-              )
-              
-            ) empty_context 
-          in*)
 
         (Instance (class_name, dt, instances)
                 , empty_context, Usage.empty)

@@ -1,19 +1,23 @@
-infixl 6 `convert`;
+infixl 6 `coerce`;
 
-class Converter : (a, b) {
-    sig `convert` : (a) -> b;
+class Coerce : (a, b) {
+    sig `coerce` : (a) -> b;
 }
 
-instance Converter : (Int, String) {
-    `convert` : intToString;
+instance Coerce : (Int, String) {
+    `coerce` : intToString;
 }
 
-instance Converter : (Bool, Int) {
-    `convert` :  fun(b) {if (b) 1 else 0};
+instance Coerce : (Int, Float) {
+    `coerce` : intToFloat;
 }
 
-instance Converter : ([Int], Int) {
-    `convert` : max_list;
+instance Coerce : (Bool, Int) {
+    `coerce` :  fun(b) {if (b) 1 else 0};
 }
 
-`convert` [4, 5, 3, 9]
+instance Coerce : ([Int], Int) {
+    `coerce` : max_list;
+}
+
+`coerce` [4, 5, 3, 9]
