@@ -787,8 +787,7 @@ object (o : 'self)
         with NotFound _ -> raise (internal_error ("Subkind class not found: " ^ class_name))
       in
       
-      let o = o#set_allow_implictly_bound_vars false in
-      (* Aliases must never use type variables from an outer scope *)
+      (* Classes must never use type variables from an outer scope *)
       let o = o#reset_vars in
       (* Process the class *)
       let o, resolved_qs, fun' = o#quantified 

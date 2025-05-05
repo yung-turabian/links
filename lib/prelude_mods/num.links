@@ -3,94 +3,48 @@ infixl 6 +;
 infixl 6 `sub`;
 infixl 7 *;
 infixl 7 /;
-
-typename Nat = [|Zero|Succ:Nat|];
-
-# Mutually recursive functions
-mutual {
-		sig isOdd : (Nat) ~> Bool
-		fun isOdd(n) {
-			switch(n) {
-				case Zero -> false
-				case Succ(n) -> isEven(n)
-			}
-		}
-
-		sig isEven : (Nat) ~> Bool
-		fun isEven(n) {
-			switch(n) {
-				case Zero -> true
-				case Succ(n) -> isOdd(n)
-			}
-		}
-}
-
-sig isZero : (Nat) ~> Bool
-fun isZero(n) {
-		switch (n) {
-				case Zero -> true
-				case Succ(_) -> false
-		}
-}
-
-sig pred : (Nat) ~> Nat
-fun pred(n) {
-		switch (n) {
-				case Zero -> error("pred Zero is undefined.")
-				case Succ(m) -> m
-		}
-}
-
-sig addNat : (Nat, Nat) ~> Nat
-fun addNat(n1, n2) {
-		switch (n1) {
-						case Zero -> n2
-						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
-		}
-}
-
-sig mulNat : (Nat, Nat) ~> Nat
-fun mulNat(n1, n2) {
-		switch (n1) {
-						case Zero -> n2
-						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
-		}
-}
+infixl 6 `negate`;
 
 class Num : (a::Type(Unl, Any)) {
 		sig + : (a, a) -> a;
 		sig * : (a, a) -> a;
 		sig `sub` : (a, a) -> a;
-		sig / : (a, a) -> a;
 		sig `negate` : (a) -> a;
 		sig ^ : (a, a) -> a;
 		sig `abs` : (a) -> a;
+        sig `fromInteger` : (Int) -> a;
 }
 
 
 instance Num : Int {
 		+ : addInt;
 		* : mulInt;
-		`sub` : (-);
-		/ : divInt;
+		`sub` : (-); # Hacky, should be proper
 		`negate` : negInt;
 		^ : powInt;
 		`abs`: fun(i) { if (i < 0) `negate` i else i };
+        `fromInteger` : fun(i) { i };
 }
 
 instance Num : Float {
 		+ : addFloat;
 		* : mulFloat;
 		`sub` : (-.);
-		/ : divFloat;
 		`negate` : negFloat;
 		^ : powFloat;
 		`abs`: fun(f) { if (f < 0.0) `negate` f else f };
+        `fromInteger` : intToFloat;
 }
 
-#instance Num : Nat {
-#		+ : addNat;
-#		* : mulNat;
-#		`negate` : fun(n) { error("Attempted to negate a natural number.") };
-#}
+class Fractional : (a::Type(Unl, Num)) {
+    sig / : (a, a) -> a;
+}
+
+instance Fractional : Int {
+    / : divInt;
+}
+
+instance Fractional : Float {
+    / : divFloat;
+}
 
