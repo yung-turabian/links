@@ -4,10 +4,10 @@ typename Temperature = [|Cel:Float|Far:Float|];
 sig checkTempEquality : (Temperature, Temperature) -> Bool
 fun checkTempEquality(x, y) {
     switch ((x,y)) {
-            case (Cel(m), Cel(n)) -> m == n
-            case (Far(m), Far(n)) -> m == n
-            case (Cel(c), Far(f)) -> (1.8 * c + 32.0) == f
-            case (Far(f), Cel(c)) -> (1.8 * c + 32.0) == f
+            case (Cel(m), Cel(n)) -> m `eq` n
+            case (Far(m), Far(n)) -> m `eq` n
+            case (Cel(c), Far(f)) -> (1.8 * c + 32.0) `eq` f
+            case (Far(f), Cel(c)) -> (1.8 * c + 32.0) `eq` f
     }
 }
 

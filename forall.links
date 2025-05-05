@@ -1,0 +1,5 @@
+
+sig x : forall a::Num, e::Eff . (a::Num) -e-> a
+fun x (y) {
+    y
+}
