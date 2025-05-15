@@ -113,6 +113,8 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
       | None     -> fields
       | Some fvs -> ("environment", jsonize_value' fvs) :: fields in
     lit ~tag:"FunctionPtr" fields'
+  | `SubkindClassFunction n ->
+     lit ~tag:"SubkindClassOp" [("op", `String(n))]
   | `ClientDomRef i ->
      lit ~tag:"ClientDomRef" [("_domRefKey", `String (string_of_int i))]
   | `ClientFunction name -> lit ~tag:"ClientFunction" [("func", `String name)]

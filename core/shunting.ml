@@ -85,8 +85,8 @@ module Optable = struct
 
       ; "=~" , (5, Right)
 
-      ; "==" , (4, None)
-      ; "<>" , (4, None)
+      ; "==$" , (4, None)
+      ; "<>$" , (4, None)
       ; "<"  , (4, None)
       ; "<=" , (4, None)
       ; ">=" , (4, None)

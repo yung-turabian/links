@@ -56,10 +56,10 @@ let type_binary_op env tycon_env subkind_env =
   (*| Name "++"    -> TyEnv.find "Concat" env*)
   | Name ">"
   | Name ">="
-  | Name "=="
+  | Name "==$"
   | Name "<"
   | Name "<="
-  | Name "<>" ->
+  | Name "<>$" ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
         ForAll ([ab; eb],

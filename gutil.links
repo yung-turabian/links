@@ -1,0 +1,77 @@
+# General utility for Links programming
+
+#
+# List Operations
+#
+sig singleton : (a) -> [a]
+fun singleton (x) { [x] }
+
+sig merge : ([a::Ord], [a]) ~> [a]
+fun merge (l1, l2) {
+    switch((l1, l2)) {
+        case ([], ys) -> ys
+        case (xs, []) -> xs
+        case (x::xs, y::ys) ->
+            if (x < y)
+                x::merge(xs, y::ys)
+            else
+                y::merge(x::xs, ys)
+    }
+}
+
+sig halve : ([a]) ~> ([a], [a])
+fun halve (l) {
+    var lhalf = length(l) / 2;
+
+    (take(lhalf, l), drop(lhalf, l))
+}
+
+sig msort : ([a::Ord]) ~> [a]
+fun msort(l) {
+    switch(l) {
+        case [] -> []
+        case [x] -> [x]
+        case xs -> 
+            var (left, right) = halve(xs);
+            merge (msort(left), msort(right))
+    }
+}
+
+
+sig palindrome : ([%a::Ord]) ~> Bool 
+fun palindrome(l) {
+		var rev = reverse(l);
+
+		sig aux : ([%a], [%a]) ~> Bool
+		fun aux(l, rev) {
+				switch((l, rev)) {
+						case ([], []) -> true
+						case (x::xs, y::ys) -> 
+								x == y && aux(xs, ys)
+				}
+		}
+		aux(l, rev)
+}
+
+#
+# Type Coercion (Conversion)
+#
+
+infixl 6 `coerce`;
+
+class Convert : (a, b) {
+    sig `coerce` : (a) -> b;
+}
+
+instance Convert : (Int, String) {
+    `coerce` : intToString;
+}
+
+instance Convert : (Bool, Int) {
+    `coerce` :  fun(b) {if (b) 1 else 0};
+}
+
+instance Convert : ([Int], Int) {
+    `coerce` : max_list;
+}
+

@@ -352,7 +352,7 @@ fun rand() {do Rand}
 
 sig ms : (Int, (Int) {Rand:Float |e}~> a) {Rand:Float |e}~> a
 fun ms(n,k) {
-  var r = floatToInt(rand() *. 1000.0);
+  var r = floatToInt(rand() * 1000.0);
   var take = (r `mod` 3) + 1; # Make sure take is in {1,2,3}
   if (take <= n) {k(take)}    # Make sure it is a legal move...
   else {k(1)}                 # ... otherwise just pick one (might be suboptimal)

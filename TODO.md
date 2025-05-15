@@ -6,6 +6,8 @@
     + It will get all templates and implementations and when a new instance is created for subclass, add those functions
     + This might have been solved
 
++ IrToJS doesn't properly translate instances.
+
 ## Future plans
 
 + Fix how multi type variables are handled, works but is pretty broken 

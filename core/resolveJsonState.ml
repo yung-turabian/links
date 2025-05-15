@@ -18,6 +18,7 @@ let rec extract_json_values : Value.t -> (handler_id_set * (Value.chan list)) =
   | `List [] | `SpawnLocation _ | `Pid _
   | `AccessPointID _ | `ClientDomRef _
   | `ClientFunction _ | `ClientClosure _
+  | `SubkindClassFunction _
   |  `Alien -> empty_state
 
   (* Session channels *)

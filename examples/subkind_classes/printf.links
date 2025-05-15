@@ -1,29 +1,26 @@
-class PrintfType : (r::Type) {
-    sig `sprintf` : (String, [String]) ~> [r];
+typename Format = [|FInt:Format | FString:Format | FOther:(Char,Format) | FEnd |];
+
+sig format : ([Char]) ~> Format
+fun format(fmt) {
+    switch(fmt) {
+        case [] -> FEnd
+        case '%'::'d'::cs -> FInt (format(cs))
+        case '%'::'s'::cs -> FString (format(cs))
+        case c::cs -> FOther (c, (format(cs)))
+    }
 }
 
-instance PrintfType : String {
-    `sprintf` : 
-        fun(fmt, args) {
-            var fmtExpl = explode(fmt);
-            
-            fun aux(fmt, args) {
-                switch((fmt, args)) {
-                    case ([], _) -> []
-                    #case (('%'::'s'::cs), a::as) -> a ++ aux(cs, as)
-                    #case ((c::cs), as) -> c::(aux(cs, as))
-                    case (_, []) -> error("Not enough arguments!")
-                }
-            }
+sig formatString : (String) ~> Format
+fun formatString(str) {
+    format(explode(str))
+}
 
-            aux(fmtExpl, args)
-        };
+# Find someway: https://www.reddit.com/r/programming/comments/23xgqa/idris_type_safe_printf/
+mutual {
+    typename InterpFormatIn (e::Eff) = (Int) -e-> InterpFormat(e);
+    typename InterpFormat(e::Eff) = [||];
 }
 
 
-sig printf : (String) ~> [r::PrintfType]
-fun printf (fmt) {
-    fmt `sprintf` []
-}
-
-printf("Hello %s")
+#sig printf : (String) ~> interpFormat (formatString s)
+#fun print(fmt)

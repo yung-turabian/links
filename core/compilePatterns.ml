@@ -223,7 +223,7 @@ struct
     let eff = lookup_effects env in
     ApplyPure
       (TApp
-         (Variable (NEnv.find "==" Lib.nenv),
+         (Variable (NEnv.find "==$" Lib.nenv),
           [(Type, t); (Row, eff)]),
        [v1; v2])
 end

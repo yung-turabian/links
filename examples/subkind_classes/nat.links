@@ -42,4 +42,3 @@ fun addNat(n1, n2) {
 						case Succ(pred_n) -> addNat(pred_n, Succ(n2))
 		}
 }
-

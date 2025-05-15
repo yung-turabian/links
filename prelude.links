@@ -60,6 +60,69 @@ instance Fractional : Float {
     / : divFloat;
 }
 
+
+
+infix 4 ==;
+infix 4 <>;
+
+sig eqBool : (Bool, Bool) -> Bool 
+fun eqBool (x, y) {
+		if (x ==$ y) true
+		else false
+}
+
+sig eqInt : (Int, Int) -> Bool 
+fun eqInt(x, y) {
+		if (x ==$ y) true
+		else false
+}
+
+sig eqFloat : (Float, Float) -> Bool 
+fun eqFloat(x, y) {
+		if (x ==$ y) true
+		else false
+}
+
+sig ltInt : (Int, Int) -> Bool 
+fun ltInt(x, y) {
+		if (x < y) true
+		else false
+}
+
+class Eq : (a) {
+	sig == : (a, a) -> Bool;
+    sig <> : (a, a) -> Bool;
+}
+
+instance Eq : Int {
+	== : eqInt; 
+    <> : fun(m, n) {not(eqInt(m, n))};
+}
+
+instance Eq : Float {
+    == : eqFloat; 
+    <> : fun(m, n) {not(eqFloat(m, n))};
+}
+
+instance Eq : Bool {
+    == : eqBool; 
+    <> : fun(m, n) {not(eqBool(m, n))};
+}
+
+sig eqList : ([a::Eq], [a::Eq]) -> Bool
+fun eqList(l1, l2) {
+    switch((l1, l2)) {
+        case ([], []) -> true
+        case ([x], [y]) -> x == y
+        case (xs, ys) -> xs ==$ ys # Maintain purity
+    } 
+}
+
+#instance Eq : [a] {
+#    == : eqList;
+#    <> : fun(m, n) {not(eqList(m, n))};
+#}
+
 class Show : (a::Type) {
 		sig `stringOf` : (a) -> String;
 }
@@ -80,54 +143,24 @@ instance Show : Char {
 		`stringOf` : fun (c) { implode(c :: []) };
 }
 
-sig eqInt : (Int, Int) -> Bool 
-fun eqInt(x, y) {
-		if (x == y) true
-		else false
-}
-
-sig eqFloat : (Float, Float) -> Bool 
-fun eqFloat(x, y) {
-		if (x == y) true
-		else false
-}
-
-sig ltInt : (Int, Int) -> Bool 
-fun ltInt(x, y) {
-		if (x < y) true
-		else false
-}
-
-class Eq : (a::Type) {
-		sig `eq` : (a, a) -> Bool;
-}
-
-instance Eq : Int {
-		`eq` : eqInt; 
-}
-
-instance Eq : Float {
-		`eq` : eqFloat; 
-}
-
 class Ord : (a::Eq) {
-		sig `lteq` : (a, a) -> Bool;
+	sig `lteq` : (a, a) -> Bool;
 }
 
 instance Ord : Int {
-		`lteq` : fun(x, y) { if (x `eq` y || ltInt(x,y)) true else false};
+		`lteq` : fun(x, y) { if (x == y || ltInt(x,y)) true else false};
 }
 
 sig compare_adjacent : ([a::Ord], (a::Ord, a::Ord) ~b~> Bool) ~b~> Bool
 fun compare_adjacent(l, cmp) {
     switch(l) {
         case [] -> true
-				case [_] -> true
+		case [_] -> true
         case x::y::rest -> cmp(x, y) && compare_adjacent(y::rest, cmp)
     }
 }
 
-fun all_equal(l) { compare_adjacent(l, (`eq`)) }
+fun all_equal(l) { compare_adjacent(l, (==)) }
 fun is_non_decreasing(l) { compare_adjacent(l, (`lteq`)) }
 
 sig square : (%a) -> %a
@@ -381,21 +414,6 @@ fun reverse(l) {
     }
   }
   aux(l, [])
-}
-
-sig palindrome : ([%a::Ord]) ~> Bool 
-fun palindrome(l) {
-		var rev = reverse(l);
-
-		sig aux : ([%a], [%a]) ~> Bool
-		fun aux(l, rev) {
-				switch((l, rev)) {
-						case ([], []) -> true
-						case (x::xs, y::ys) -> 
-								x `eq` y && aux(xs, ys)
-				}
-		}
-		aux(l, rev)
 }
 
 fun concat(list) {
@@ -1399,7 +1417,7 @@ fun choice (items) {
   choiceDefault(items, selected)
 }
 
-typename Either (a,b) = [|Left:a | Right : b|];
+typename Either (a,b) = [|Left:a | Right:b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.

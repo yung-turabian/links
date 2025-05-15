@@ -2039,10 +2039,10 @@ let type_binary_op pos ctxt =
   (*| Name "++"    -> add_empty_usages (Utils.instantiate ctxt.var_env "Concat")*)
   | Name ">"
   | Name ">="
-  | Name "=="
+  | Name "==$"
   | Name "<"
   | Name "<="
-  | Name "<>"    ->
+  | Name "<>$"    ->
       let a = Types.fresh_type_variable any_subkind in
       let eff = Types.make_empty_open_row default_effect_subkind in
         ([(PrimaryKind.Type, a); (PrimaryKind.Row, eff)],

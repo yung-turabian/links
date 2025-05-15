@@ -1,0 +1,29 @@
+class Monad : (m::Type) {
+    sig >>= : (a, (a) -> b) -> b;
+    sig `return` : (a) -> m(a); # Type variables can't wrap
+}
+
+instance Monad : Maybe(a) {
+    >>= : fun(m, f) { 
+                  switch (m) {
+                        case Nothing -> Nothing
+                        case Just -> f(m)
+                      }
+                  };
+    `return` : fun (x) { Just(x) };
+}
+
+typename Sheep = [| Father:Sheep | Mother:Sheep |];
+
+sig father : (Sheep) -> Maybe(Sheep)
+fun father ( s ) {
+    switch ( s ) {
+        case Father(father) -> `return` father
+        case other -> Nothing
+    }
+}
+
+#sig maternalGrandfather : (Sheep) -> Maybe(Sheep)
+#fun maternalGrandfather ( s ) {
+#    s
+#} 

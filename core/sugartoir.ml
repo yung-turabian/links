@@ -931,7 +931,7 @@ struct
           | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
-          | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==#" | "<" | "<=" | "<>#") as op)), e1, e2) ->
               cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))

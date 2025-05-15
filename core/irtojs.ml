@@ -1484,6 +1484,18 @@ end = functor (K : CONTINUATION) -> struct
           let varenv = VEnv.bind a object_name varenv in
           state, varenv, None, Code.MetaContinuation.identity
       end
+    | Ir.CFun b ->
+      let (x, x_name) = name_binder b in
+      (* Debug.print ("class method binding: " ^ x_name); *)
+      let varenv = VEnv.bind x x_name varenv in
+      let value = Value.Env.find x valenv in
+      let jsonized_val = Json.jsonize_value value |> Json.json_to_string in
+      let state = ResolveJsonState.add_value_information value state in
+      (state,
+       varenv,
+       Some x_name,
+       fun code -> Bind (x_name, call Runtime.JSON.parse [Constructors.strlit jsonized_val], code))
+    | Ir.CInst _
     | Ir.Module _ -> state, varenv, None, Code.MetaContinuation.identity
 
   let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * Code.MetaContinuation.t =

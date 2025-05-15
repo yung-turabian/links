@@ -1,0 +1,3 @@
+Integer
+2 == 2
+stdout : true : Bool
